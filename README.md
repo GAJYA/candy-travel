@@ -2,19 +2,21 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# Candy Travel Vue 3
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/757a7657-3795-4649-af19-8e91276f4c77
+这是一个使用 Vue 3、Vite 和 Tailwind CSS 构建的旅行规划界面原型。
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js 18+
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+   `yarn install`
+2. Update `.env.local` if you need local environment variables
 3. Run the app:
-   `npm run dev`
+   `yarn dev`
+
+## Notes
+
+- 当前项目已从 React 重构为 Vue 3 单文件组件结构。
+- 如果看到 `crypto.getRandomValues is not a function` 或 Vite 启动失败，说明 Node.js 版本过旧。升级到 Node.js 18 或更高版本后重新安装依赖即可。

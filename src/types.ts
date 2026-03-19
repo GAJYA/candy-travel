@@ -1,27 +1,28 @@
+export type TabId = 'home' | 'calendar' | 'ai' | 'profile';
+
 export type TransportMode = 'flight' | 'train' | 'bus' | 'car';
 
-export interface Activity {
-  id: string;
-  time: string;
+export interface UpcomingTrip {
+  city: string;
+  date: string;
+  status: 'confirmed' | 'planning';
+  iconBgClass: string;
+  iconTextClass: string;
+  statusClass: string;
+  kind: 'plane' | 'train';
+}
+
+export interface CalendarActivity {
   title: string;
+  time: string;
   description: string;
-  location?: string;
-  type: 'restaurant' | 'museum' | 'transport' | 'other';
-  status?: string;
+  meta: string;
+  tone: 'tertiary' | 'secondary';
+  icon: 'utensils' | 'landmark';
+  metaIcon: 'map-pin' | 'ticket';
 }
 
-export interface Trip {
-  id: string;
-  destination: string;
-  startDate: string;
-  endDate: string;
-  status: 'confirmed' | 'planning' | 'draft';
-  transportMode: TransportMode;
-  activities: Activity[];
-}
-
-export interface UserStats {
-  plannedCities: number;
-  tripCount: number;
-  totalDistanceKm: number;
+export interface PackingItem {
+  label: string;
+  checked: boolean;
 }
