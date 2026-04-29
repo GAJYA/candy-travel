@@ -1,31 +1,23 @@
 <script setup lang="ts">
+import {computed} from 'vue';
 import {ChevronRight, Map, Plane, Plus, Sparkles, Train} from 'lucide-vue-next';
-import type {UpcomingTrip} from '@/types';
+import {
+  getHomeOverviewStats,
+  getNextTripCountdown,
+  loadUpcomingTrips,
+} from '@/data/homeOverview';
 
-const upcomingTrips: UpcomingTrip[] = [
-  {
-    city: '日本京都',
-    date: '2024年11月4日 - 11月8日',
-    status: 'confirmed',
-    iconBgClass: 'bg-secondary-fixed group-hover:bg-secondary',
-    iconTextClass: 'text-secondary group-hover:text-white',
-    statusClass: 'bg-tertiary-fixed text-tertiary',
-    kind: 'train',
-  },
-  {
-    city: '韩国首尔',
-    date: '2024年12月5日 - 12月9日',
-    status: 'planning',
-    iconBgClass: 'bg-primary-fixed group-hover:bg-primary',
-    iconTextClass: 'text-primary group-hover:text-white',
-    statusClass: 'bg-secondary-fixed text-secondary',
-    kind: 'plane',
-  },
-];
+const trips = loadUpcomingTrips();
+
+const countdown = computed(() => getNextTripCountdown(trips));
+const stats = computed(() => getHomeOverviewStats(trips));
+const upcomingTrips = computed(() => trips.slice(0, 3));
 
 const tripStatusLabel = {
+  draft: '草稿',
   confirmed: '已确认',
   planning: '规划中',
+  completed: '已完成',
 } as const;
 </script>
 
@@ -39,23 +31,23 @@ const tripStatusLabel = {
         <span class="mb-2 text-xs font-bold uppercase tracking-widest opacity-80">下一次冒险开始于</span>
         <div class="flex items-center gap-4">
           <div class="flex flex-col items-center">
-            <span class="text-4xl font-black">12</span>
+            <span class="text-4xl font-black">{{ countdown?.days ?? '00' }}</span>
             <span class="text-[10px] font-medium opacity-90">天</span>
           </div>
           <span class="text-2xl font-light opacity-40">:</span>
           <div class="flex flex-col items-center">
-            <span class="text-4xl font-black">08</span>
+            <span class="text-4xl font-black">{{ countdown?.hours ?? '00' }}</span>
             <span class="text-[10px] font-medium opacity-90">时</span>
           </div>
           <span class="text-2xl font-light opacity-40">:</span>
           <div class="flex flex-col items-center">
-            <span class="text-4xl font-black">45</span>
+            <span class="text-4xl font-black">{{ countdown?.minutes ?? '00' }}</span>
             <span class="text-[10px] font-medium opacity-90">分</span>
           </div>
         </div>
         <button class="bouncy-hover mt-4 flex items-center gap-2 rounded-full bg-white/20 px-6 py-2 backdrop-blur-sm transition-all hover:bg-white/30" type="button">
           <Plane :size="14" />
-          <span class="text-sm font-bold">前往 日本东京</span>
+          <span class="text-sm font-bold">前往 {{ countdown?.destinationCity ?? '下一站' }}</span>
         </button>
       </div>
     </section>
@@ -72,12 +64,12 @@ const tripStatusLabel = {
       </div>
 
       <div class="bouncy-hover flex flex-col items-center rounded-2xl border border-pink-100 bg-primary-fixed/30 p-4 text-center">
-        <span class="text-3xl font-black text-primary">14</span>
+        <span class="text-3xl font-black text-primary">{{ stats.plannedCities }}</span>
         <span class="mt-1 text-xs font-bold uppercase text-outline">计划城市</span>
       </div>
 
       <div class="bouncy-hover flex flex-col items-center rounded-2xl border border-pink-100 bg-tertiary-fixed/30 p-4 text-center">
-        <span class="text-3xl font-black text-tertiary">08</span>
+        <span class="text-3xl font-black text-tertiary">{{ stats.tripCount }}</span>
         <span class="mt-1 text-xs font-bold uppercase text-outline">旅行次数</span>
       </div>
 
@@ -87,7 +79,7 @@ const tripStatusLabel = {
         </div>
         <div>
           <p class="text-xs font-bold uppercase tracking-tighter opacity-80">行程距离</p>
-          <p class="text-3xl font-black">24,530 <span class="text-sm font-medium">km</span></p>
+          <p class="text-3xl font-black">{{ stats.distanceKm.toLocaleString('zh-CN') }} <span class="text-sm font-medium">km</span></p>
         </div>
         <div class="flex -space-x-2">
           <div class="flex h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-white/20 backdrop-blur-md">

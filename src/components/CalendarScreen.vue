@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue';
+import {computed, reactive, ref, watch} from 'vue';
 import {Calendar} from 'v-calendar';
 import {
   CalendarDays,
   ChevronRight,
+  Clock3,
+  FilePenLine,
   Landmark,
   MapPin,
   Plane,
@@ -12,37 +14,32 @@ import {
   Ticket,
   Train,
   Utensils,
+  Trash2,
 } from 'lucide-vue-next';
-
-interface ActivityCard {
-  title: string;
-  time: string;
-  description: string;
-  meta: string;
-  tone: 'tertiary' | 'secondary';
-  icon: 'utensils' | 'landmark';
-  metaIcon: 'map-pin' | 'ticket';
-}
-
-interface DayPlan {
-  summary: string;
-  hint: string;
-  highlight: string;
-  activities: ActivityCard[];
-}
+import {useTripStore, type TripDay, type TripEvent, type TripEventType} from '@/store/tripStore';
 
 type MarkerKind = 'sparkles' | 'train' | 'dot';
 type ClickedDay = {
   date: Date;
 };
 
-const today = new Date();
-const currentYear = today.getFullYear();
-const currentMonth = today.getMonth();
-const selectedDate = ref(new Date(currentYear, currentMonth, today.getDate()));
-const calendarKey = ref(0);
+const {
+  tripList,
+  selectedTrip,
+  selectTrip,
+  upsertTripDay,
+  removeTripDay,
+  upsertTripEvent,
+  removeTripEvent,
+} = useTripStore();
 
-const createDate = (day: number) => new Date(currentYear, currentMonth, day);
+const today = new Date();
+const parseDateOnly = (value: string) => new Date(`${value}T00:00:00`);
+const selectedDate = ref(selectedTrip.value ? parseDateOnly(selectedTrip.value.startDate) : new Date());
+const calendarKey = ref(0);
+const showEventEditor = ref(false);
+const editingEventId = ref<string | null>(null);
+
 const formatKey = (date: Date) => {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -51,134 +48,39 @@ const formatKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const dates = {
-  tripStart: createDate(4),
-  tripDays: [createDate(5), createDate(6), createDate(7)],
-  featuredDay: createDate(13),
-  dotDay: createDate(16),
-};
+const selectedKey = computed(() => formatKey(selectedDate.value));
+const tripFormatter = new Intl.DateTimeFormat('zh-CN', {month: 'numeric', day: 'numeric'});
+const timeFormatter = new Intl.DateTimeFormat('zh-CN', {hour: '2-digit', minute: '2-digit', hour12: false});
 
-const plansByDate: Record<string, DayPlan> = {
-  [formatKey(dates.tripStart)]: {
-    summary: '出发日',
-    hint: '今天正式启程，记得提前在线值机并预留足够的机场交通时间。',
-    highlight: '出发',
-    activities: [
-      {
-        title: '飞往东京',
-        time: '08:40',
-        description: '国际航班 MU523，值机和托运都已准备好。',
-        meta: '浦东国际机场 T1',
-        tone: 'tertiary',
-        icon: 'utensils',
-        metaIcon: 'map-pin',
-      },
-    ],
-  },
-  [formatKey(dates.tripDays[0])]: {
-    summary: '城市探索',
-    hint: '轻松适应旅程节奏，优先安排步行可达的点位。',
-    highlight: '漫游',
-    activities: [
-      {
-        title: '浅草寺晨间散步',
-        time: '09:30',
-        description: '拍照、抽签并顺路吃一份热腾腾的人形烧。',
-        meta: '台东区浅草',
-        tone: 'tertiary',
-        icon: 'utensils',
-        metaIcon: 'map-pin',
-      },
-      {
-        title: 'teamLab Borderless',
-        time: '15:00',
-        description: '提前 15 分钟到场，门票已预订。',
-        meta: '电子门票已确认',
-        tone: 'secondary',
-        icon: 'landmark',
-        metaIcon: 'ticket',
-      },
-    ],
-  },
-  [formatKey(dates.tripDays[2])]: {
-    summary: '换城日',
-    hint: '今天改乘新干线前往京都，站内换乘信息已提前整理好。',
-    highlight: '移动',
-    activities: [
-      {
-        title: '东京站出发去京都',
-        time: '10:20',
-        description: '乘坐东海道新干线 Nozomi，车票已出票。',
-        meta: '东京站 18 号站台',
-        tone: 'secondary',
-        icon: 'landmark',
-        metaIcon: 'ticket',
-      },
-    ],
-  },
-  [formatKey(dates.featuredDay)]: {
-    summary: '精选安排',
-    hint: '这是本月安排最丰富的一天，适合把重点活动放在今天。',
-    highlight: '重点',
-    activities: [
-      {
-        title: '在横滨吃午餐',
-        time: '12:30',
-        description: '寿司与拉面双拼的轻松午后。',
-        meta: '东京湾区',
-        tone: 'tertiary',
-        icon: 'utensils',
-        metaIcon: 'map-pin',
-      },
-      {
-        title: '数字艺术馆',
-        time: '15:00',
-        description: '沉浸式体验 teamLab 无界展。',
-        meta: '门票已确认',
-        tone: 'secondary',
-        icon: 'landmark',
-        metaIcon: 'ticket',
-      },
-    ],
-  },
-  [formatKey(dates.dotDay)]: {
-    summary: '轻松日程',
-    hint: '今天只有一项轻量事件，适合购物、发呆或在咖啡馆慢慢坐一会儿。',
-    highlight: '轻松',
-    activities: [
-      {
-        title: '银座购物补货',
-        time: '14:00',
-        description: '补齐伴手礼，顺带去附近咖啡馆休息。',
-        meta: '中央区银座',
-        tone: 'tertiary',
-        icon: 'utensils',
-        metaIcon: 'map-pin',
-      },
-    ],
-  },
-};
-
-const tripRangeText = computed(() => {
-  const formatter = new Intl.DateTimeFormat('zh-CN', {
-    month: 'numeric',
-    day: 'numeric',
-  });
-
-  return `${formatter.format(dates.tripStart)} - ${formatter.format(dates.tripDays[2])}`;
+const dayDraft = reactive({
+  summary: '',
+  hint: '',
+  highlightTag: '',
 });
 
-const selectedKey = computed(() => formatKey(selectedDate.value));
+const eventDraft = reactive({
+  title: '',
+  description: '',
+  time: '09:30',
+  eventType: 'activity' as TripEventType,
+  metaValue: '',
+});
 
-const selectedPlan = computed<DayPlan>(() => {
-  return (
-    plansByDate[selectedKey.value] ?? {
-      summary: '今天还没有安排行程',
-      hint: '可以继续切换月份并点选日期，然后直接为这一天创建新的活动。',
-      highlight: '空闲',
-      activities: [],
-    }
-  );
+const selectedTripDays = computed(() => selectedTrip.value?.days ?? []);
+const selectedTripEvents = computed(() => selectedTrip.value?.events ?? []);
+const selectedDayRecord = computed<TripDay | null>(() => {
+  return selectedTripDays.value.find((day) => day.date === selectedKey.value) ?? null;
+});
+const selectedDayEvents = computed(() => {
+  return selectedTripEvents.value.filter((event) => event.startAt.slice(0, 10) === selectedKey.value);
+});
+const selectedPlan = computed(() => {
+  return {
+    summary: selectedDayRecord.value?.summary ?? '今天还没有安排行程',
+    hint: selectedDayRecord.value?.hint ?? '可以继续切换月份并点选日期，然后直接为这一天创建新的活动。',
+    highlight: selectedDayRecord.value?.highlightTag ?? '空闲',
+    activities: selectedDayEvents.value,
+  };
 });
 
 const selectedDateLabel = computed(() => {
@@ -189,16 +91,28 @@ const selectedDateLabel = computed(() => {
   }).format(selectedDate.value);
 });
 
-const markerMap: Record<string, MarkerKind> = {
-  [formatKey(dates.tripStart)]: 'sparkles',
-  [formatKey(dates.tripDays[2])]: 'train',
-  [formatKey(dates.dotDay)]: 'dot',
-};
+const tripRangeText = computed(() => {
+  if (!selectedTrip.value) {
+    return '--';
+  }
 
-const travelDayKeys = new Set([
-  formatKey(dates.tripStart),
-  ...dates.tripDays.map(formatKey),
-]);
+  return `${tripFormatter.format(parseDateOnly(selectedTrip.value.startDate))} - ${tripFormatter.format(parseDateOnly(selectedTrip.value.endDate))}`;
+});
+
+const markerMap = computed<Record<string, MarkerKind>>(() => {
+  return selectedTripDays.value.reduce<Record<string, MarkerKind>>((accumulator, day) => {
+    if (day.highlightTag.includes('出发')) {
+      accumulator[day.date] = 'sparkles';
+    } else if (day.highlightTag.includes('移动') || day.highlightTag.includes('换城')) {
+      accumulator[day.date] = 'train';
+    } else {
+      accumulator[day.date] = 'dot';
+    }
+    return accumulator;
+  }, {});
+});
+
+const travelDayKeys = computed(() => new Set(selectedTripDays.value.map((day) => day.date)));
 
 const calendarMasks = {
   title: 'YYYY年M月',
@@ -210,11 +124,11 @@ const isSameDate = (left: Date, right: Date) =>
   left.getMonth() === right.getMonth() &&
   left.getDate() === right.getDate();
 
-const getMarker = (date: Date) => markerMap[formatKey(date)] ?? null;
+const getMarker = (date: Date) => markerMap.value[formatKey(date)] ?? null;
 const isSelected = (date: Date) => isSameDate(date, selectedDate.value);
 const isTodayCell = (date: Date) => isSameDate(date, today);
-const isTravelDay = (date: Date) => travelDayKeys.has(formatKey(date));
-const isTravelStart = (date: Date) => isSameDate(date, dates.tripStart);
+const isTravelDay = (date: Date) => travelDayKeys.value.has(formatKey(date));
+const isTravelStart = (date: Date) => selectedTrip.value?.startDate === formatKey(date);
 
 const jumpToToday = () => {
   selectedDate.value = new Date();
@@ -224,10 +138,156 @@ const jumpToToday = () => {
 const handleDayClick = (day: ClickedDay) => {
   selectedDate.value = day.date;
 };
+
+const resetEventDraft = () => {
+  editingEventId.value = null;
+  eventDraft.title = '';
+  eventDraft.description = '';
+  eventDraft.time = '09:30';
+  eventDraft.eventType = 'activity';
+  eventDraft.metaValue = '';
+  showEventEditor.value = false;
+};
+
+const syncDayDraft = () => {
+  dayDraft.summary = selectedDayRecord.value?.summary ?? '今天还没有安排行程';
+  dayDraft.hint = selectedDayRecord.value?.hint ?? '可以继续补充交通、活动或住宿安排。';
+  dayDraft.highlightTag = selectedDayRecord.value?.highlightTag ?? '空闲';
+};
+
+watch([selectedTrip, selectedKey], () => {
+  if (selectedTrip.value && !selectedTripDays.value.some((day) => day.date === selectedKey.value)) {
+    syncDayDraft();
+  } else {
+    syncDayDraft();
+  }
+}, {immediate: true});
+
+watch(
+  selectedTrip,
+  (trip) => {
+    if (trip) {
+      selectedDate.value = parseDateOnly(trip.startDate);
+    }
+  },
+  {immediate: true},
+);
+
+const saveDayPlan = () => {
+  if (!selectedTrip.value) {
+    return;
+  }
+
+  upsertTripDay(selectedTrip.value.id, {
+    id: selectedDayRecord.value?.id,
+    date: selectedKey.value,
+    summary: dayDraft.summary.trim() || '今天还没有安排行程',
+    hint: dayDraft.hint.trim() || '可以继续补充交通、活动或住宿安排。',
+    highlightTag: dayDraft.highlightTag.trim() || '空闲',
+    sortOrder: selectedDayRecord.value?.sortOrder ?? selectedTripDays.value.length,
+  });
+};
+
+const deleteDayPlan = () => {
+  if (!selectedTrip.value || !selectedDayRecord.value) {
+    return;
+  }
+
+  removeTripDay(selectedTrip.value.id, selectedDayRecord.value.id);
+  resetEventDraft();
+};
+
+const openNewEvent = () => {
+  editingEventId.value = null;
+  eventDraft.title = '';
+  eventDraft.description = '';
+  eventDraft.time = '09:30';
+  eventDraft.eventType = 'activity';
+  eventDraft.metaValue = '';
+  showEventEditor.value = true;
+};
+
+const openEditEvent = (event: TripEvent) => {
+  editingEventId.value = event.id;
+  eventDraft.title = event.title;
+  eventDraft.description = event.description;
+  eventDraft.time = event.startAt.slice(11, 16);
+  eventDraft.eventType = event.eventType;
+  eventDraft.metaValue = event.locationName ?? event.referenceCode ?? '';
+  showEventEditor.value = true;
+};
+
+const saveEvent = () => {
+  if (!selectedTrip.value || !eventDraft.title.trim()) {
+    return;
+  }
+
+  const tripId = selectedTrip.value.id;
+  const startAt = `${selectedKey.value}T${eventDraft.time}:00`;
+  const isTransport = eventDraft.eventType === 'transport';
+
+  upsertTripEvent(tripId, {
+    id: editingEventId.value ?? undefined,
+    eventType: eventDraft.eventType,
+    title: eventDraft.title.trim(),
+    description: eventDraft.description.trim(),
+    startAt: new Date(startAt).toISOString(),
+    locationName: isTransport ? undefined : eventDraft.metaValue.trim() || undefined,
+    referenceCode: isTransport ? eventDraft.metaValue.trim() || undefined : undefined,
+    transportMode: isTransport ? selectedTrip.value.primaryTransportMode : undefined,
+    source: 'manual',
+    status: 'confirmed',
+    meta: {
+      tone: isTransport ? 'secondary' : 'tertiary',
+      metaIcon: isTransport ? 'ticket' : 'map-pin',
+    },
+  });
+
+  if (!selectedDayRecord.value) {
+    saveDayPlan();
+  }
+
+  resetEventDraft();
+};
+
+const deleteEvent = (eventId: string) => {
+  if (!selectedTrip.value) {
+    return;
+  }
+
+  removeTripEvent(selectedTrip.value.id, eventId);
+  if (editingEventId.value === eventId) {
+    resetEventDraft();
+  }
+};
+
+const formatEventTime = (value: string) => timeFormatter.format(new Date(value));
+const getEventMetaLabel = (event: TripEvent) => event.locationName ?? event.referenceCode ?? '待补充';
+const getEventTone = (event: TripEvent) => event.meta?.tone === 'secondary' ? 'secondary' : 'tertiary';
+const getEventMetaIcon = (event: TripEvent) => event.meta?.metaIcon === 'ticket' ? 'ticket' : 'map-pin';
+const getEventCardIcon = (event: TripEvent) => (event.eventType === 'activity' ? 'landmark' : 'utensils');
 </script>
 
 <template>
   <div class="space-y-6 pb-24">
+    <section class="rounded-3xl bg-white p-4 shadow-[0_8px_24px_rgba(224,64,160,0.08)]">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary/70">当前行程</p>
+          <h2 class="mt-1 text-2xl font-black text-zinc-900">{{ selectedTrip?.title ?? '未选择行程' }}</h2>
+        </div>
+        <select
+          :value="selectedTrip?.id"
+          class="rounded-2xl border border-pink-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-zinc-900 focus:border-primary focus:outline-none"
+          @change="selectTrip(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="trip in tripList" :key="trip.id" :value="trip.id">
+            {{ trip.title }}
+          </option>
+        </select>
+      </div>
+    </section>
+
     <section class="overflow-hidden rounded-3xl bg-white p-4 shadow-[0_8px_24px_rgba(224,64,160,0.1)] sm:p-6">
       <Calendar
         :key="calendarKey"
@@ -324,41 +384,141 @@ const handleDayClick = (day: ClickedDay) => {
       </article>
     </section>
 
+    <section class="rounded-3xl bg-white p-5 shadow-[0_8px_24px_rgba(0,0,0,0.05)]">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-bold text-zinc-900">当日摘要</h3>
+          <p class="text-sm text-outline">日历页直接维护 TripDay 的 summary / hint / highlight。</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white" type="button" @click="saveDayPlan">
+            保存当天
+          </button>
+          <button
+            class="rounded-full bg-rose-50 px-4 py-2 text-sm font-bold text-rose-600"
+            type="button"
+            :disabled="!selectedDayRecord"
+            @click="deleteDayPlan"
+          >
+            清空当天
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="space-y-2">
+          <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">摘要</span>
+          <input v-model="dayDraft.summary" class="w-full rounded-2xl border border-pink-100 bg-rose-50 px-4 py-3 font-semibold text-zinc-900 focus:border-primary focus:outline-none" type="text">
+        </label>
+        <label class="space-y-2">
+          <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">标签</span>
+          <input v-model="dayDraft.highlightTag" class="w-full rounded-2xl border border-pink-100 bg-rose-50 px-4 py-3 font-semibold text-zinc-900 focus:border-primary focus:outline-none" type="text">
+        </label>
+        <label class="space-y-2 sm:col-span-2">
+          <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">提示文案</span>
+          <textarea v-model="dayDraft.hint" class="min-h-[96px] w-full rounded-2xl border border-pink-100 bg-rose-50 px-4 py-3 text-sm text-zinc-900 focus:border-primary focus:outline-none" />
+        </label>
+      </div>
+    </section>
+
     <section class="space-y-4">
       <div class="flex items-end justify-between">
         <div>
           <h3 class="text-lg font-bold text-zinc-900">当日安排</h3>
           <p class="text-sm text-outline">点选日历中的任意日期，下面的内容会同步切换。</p>
         </div>
-        <button class="bouncy-hover rounded-full bg-secondary px-4 py-2 text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,82,170,0.3)]" type="button">
+        <button class="bouncy-hover rounded-full bg-secondary px-4 py-2 text-sm font-bold text-white shadow-[0_4px_12px_rgba(124,82,170,0.3)]" type="button" @click="openNewEvent">
           添加活动
         </button>
       </div>
 
+      <article v-if="showEventEditor" class="rounded-3xl border border-pink-100 bg-rose-50/60 p-5 shadow-[0_8px_24px_rgba(224,64,160,0.08)]">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h4 class="text-lg font-bold text-zinc-900">{{ editingEventId ? '编辑活动' : '新增活动' }}</h4>
+            <p class="text-sm text-outline">当前会直接写入本地持久化 store。</p>
+          </div>
+          <button class="rounded-full bg-white px-4 py-2 text-sm font-bold text-zinc-700" type="button" @click="resetEventDraft">
+            取消
+          </button>
+        </div>
+
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="space-y-2 sm:col-span-2">
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">标题</span>
+            <input v-model="eventDraft.title" class="w-full rounded-2xl border border-pink-100 bg-white px-4 py-3 font-semibold text-zinc-900 focus:border-primary focus:outline-none" type="text">
+          </label>
+          <label class="space-y-2">
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">类型</span>
+            <select v-model="eventDraft.eventType" class="w-full rounded-2xl border border-pink-100 bg-white px-4 py-3 font-semibold text-zinc-900 focus:border-primary focus:outline-none">
+              <option value="activity">活动</option>
+              <option value="transport">交通</option>
+              <option value="stay">住宿</option>
+              <option value="reminder">提醒</option>
+            </select>
+          </label>
+          <label class="space-y-2">
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">时间</span>
+            <input v-model="eventDraft.time" class="w-full rounded-2xl border border-pink-100 bg-white px-4 py-3 font-semibold text-zinc-900 focus:border-primary focus:outline-none" type="time">
+          </label>
+          <label class="space-y-2 sm:col-span-2">
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">
+              {{ eventDraft.eventType === 'transport' ? '班次 / 票据' : '地点 / 备注' }}
+            </span>
+            <input v-model="eventDraft.metaValue" class="w-full rounded-2xl border border-pink-100 bg-white px-4 py-3 font-semibold text-zinc-900 focus:border-primary focus:outline-none" type="text">
+          </label>
+          <label class="space-y-2 sm:col-span-2">
+            <span class="text-xs font-bold uppercase tracking-[0.18em] text-outline">说明</span>
+            <textarea v-model="eventDraft.description" class="min-h-[96px] w-full rounded-2xl border border-pink-100 bg-white px-4 py-3 text-sm text-zinc-900 focus:border-primary focus:outline-none" />
+          </label>
+        </div>
+
+        <div class="mt-4 flex items-center justify-end gap-3">
+          <button class="rounded-full bg-primary px-5 py-3 text-sm font-bold text-white" type="button" @click="saveEvent">
+            {{ editingEventId ? '保存修改' : '创建活动' }}
+          </button>
+        </div>
+      </article>
+
       <div v-if="selectedPlan.activities.length" class="grid grid-cols-1 gap-4">
         <article
           v-for="(activity, index) in selectedPlan.activities"
-          :key="`${selectedKey}-${activity.title}`"
+          :key="activity.id"
           class="group flex cursor-pointer gap-4 rounded-2xl bg-white p-5 shadow-[0_8px_24px_rgba(0,0,0,0.05)] transition-all hover:shadow-[0_12px_32px_rgba(0,0,0,0.08)]"
-          :class="activity.tone === 'tertiary' ? 'border-l-8 border-tertiary' : 'border-l-8 border-secondary'"
+          :class="getEventTone(activity) === 'tertiary' ? 'border-l-8 border-tertiary' : 'border-l-8 border-secondary'"
           :style="{ transitionDelay: `${index * 80}ms` }"
         >
-          <div class="flex h-12 w-12 items-center justify-center rounded-full" :class="activity.tone === 'tertiary' ? 'bg-tertiary-fixed text-tertiary' : 'bg-secondary-fixed text-secondary'">
-            <Utensils v-if="activity.icon === 'utensils'" :size="24" />
+          <div class="flex h-12 w-12 items-center justify-center rounded-full" :class="getEventTone(activity) === 'tertiary' ? 'bg-tertiary-fixed text-tertiary' : 'bg-secondary-fixed text-secondary'">
+            <Utensils v-if="getEventCardIcon(activity) === 'utensils'" :size="24" />
             <Landmark v-else :size="24" />
           </div>
           <div class="flex-1">
             <div class="flex justify-between gap-3">
-              <h4 class="font-bold text-zinc-900">{{ activity.title }}</h4>
-              <span class="rounded-full px-2 py-0.5 text-[12px] font-bold" :class="activity.tone === 'tertiary' ? 'bg-tertiary-fixed text-tertiary' : 'bg-secondary-fixed text-secondary'">
-                {{ activity.time }}
-              </span>
+              <div>
+                <h4 class="font-bold text-zinc-900">{{ activity.title }}</h4>
+                <p class="mt-1 text-xs text-outline">{{ activity.eventType }}</p>
+              </div>
+              <div class="text-right">
+                <span class="rounded-full px-2 py-0.5 text-[12px] font-bold" :class="getEventTone(activity) === 'tertiary' ? 'bg-tertiary-fixed text-tertiary' : 'bg-secondary-fixed text-secondary'">
+                  {{ formatEventTime(activity.startAt) }}
+                </span>
+              </div>
             </div>
             <p class="mt-1 text-sm text-outline">{{ activity.description }}</p>
             <div class="mt-2 flex items-center gap-1 text-[12px] text-outline">
-              <MapPin v-if="activity.metaIcon === 'map-pin'" :size="14" />
+              <MapPin v-if="getEventMetaIcon(activity) === 'map-pin'" :size="14" />
               <Ticket v-else :size="14" />
-              <span>{{ activity.meta }}</span>
+              <span>{{ getEventMetaLabel(activity) }}</span>
+            </div>
+            <div class="mt-4 flex items-center gap-2">
+              <button class="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-zinc-700" type="button" @click="openEditEvent(activity)">
+                <FilePenLine :size="14" class="mr-1 inline-block" />
+                编辑
+              </button>
+              <button class="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-600" type="button" @click="deleteEvent(activity.id)">
+                <Trash2 :size="14" class="mr-1 inline-block" />
+                删除
+              </button>
             </div>
           </div>
         </article>
@@ -370,23 +530,26 @@ const handleDayClick = (day: ClickedDay) => {
         </div>
         <h4 class="mt-4 text-lg font-bold text-zinc-900">这一天还没有具体安排</h4>
         <p class="mt-2 text-sm text-outline">你可以继续切换月份并选择日期，或者直接为当前日期创建第一个活动。</p>
+        <button class="mt-4 rounded-full bg-secondary px-4 py-2 text-sm font-bold text-white" type="button" @click="openNewEvent">
+          新增第一个活动
+        </button>
       </article>
     </section>
 
     <article class="group flex cursor-pointer items-center justify-between rounded-2xl bg-gradient-to-r from-primary-fixed to-secondary-fixed p-6 shadow-sm transition-all hover:shadow-md">
       <div class="flex items-center gap-4">
         <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white text-secondary shadow-sm">
-          <Train :size="24" />
+          <Clock3 :size="24" />
         </div>
         <div>
           <p class="text-[12px] font-bold uppercase tracking-tighter text-primary">行程提醒</p>
-          <h4 class="font-bold text-zinc-800">本月 7 日乘坐新干线前往京都</h4>
+          <h4 class="font-bold text-zinc-800">{{ selectedPlan.hint }}</h4>
         </div>
       </div>
       <ChevronRight :size="20" class="text-zinc-800 transition-transform group-hover:translate-x-1" />
     </article>
 
-    <button class="group bouncy-hover fixed bottom-24 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-[0_8px_24px_rgba(224,64,160,0.4)]" type="button" aria-label="新增活动">
+    <button class="group bouncy-hover fixed bottom-24 right-6 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-[0_8px_24px_rgba(224,64,160,0.4)]" type="button" aria-label="新增活动" @click="openNewEvent">
       <Plus :size="32" class="transition-transform duration-300 group-hover:rotate-90" />
     </button>
   </div>

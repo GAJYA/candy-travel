@@ -6,3 +6,13 @@ declare module '*.vue' {
   const component: DefineComponent<Record<string, never>, Record<string, never>, unknown>;
   export default component;
 }
+
+declare global {
+  const uni:
+    | {
+        getStorageSync: (key: string) => unknown;
+        setStorageSync: (key: string, value: unknown) => void;
+        removeStorageSync?: (key: string) => void;
+      }
+    | undefined;
+}

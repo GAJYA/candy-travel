@@ -1,8 +1,15 @@
 node_modules/
+backend/node_modules/
+backend/data/
 build/
 dist/
+backend/dist/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+*.pem
+secret_config
+secret_config.*
+secrets/

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {reactive, ref} from 'vue';
+import {computed, ref, watch} from 'vue';
 import {
   Bed,
   Bus,
@@ -12,17 +12,35 @@ import {
   Pill,
   Plane,
   Save,
+  SquarePen,
   Timer,
   Train,
+  Trash2,
 } from 'lucide-vue-next';
-import type {PackingItem, TransportMode} from '@/types';
+import type {TransportMode} from '@/types';
+import {useTripStore} from '@/store/tripStore';
 
-const destination = ref('京都樱花之旅');
+const {
+  tripList,
+  selectedTrip,
+  selectTrip,
+  updateTrip,
+  upsertTripEvent,
+  upsertPackingItem,
+  togglePackingItem,
+  removePackingItem,
+} = useTripStore();
+
+const tripTitle = ref('');
+const originCity = ref('');
+const destinationCity = ref('');
 const departureTime = ref('09:30');
 const arrivalTime = ref('14:15');
 const hotel = ref('樱花皇宫大酒店');
 const note = ref('');
 const activeTransport = ref<TransportMode>('flight');
+const newPackingItem = ref('');
+const saveState = ref<'idle' | 'saved'>('idle');
 
 const transportModes: Array<{
   id: TransportMode;
@@ -36,27 +54,134 @@ const transportModes: Array<{
   {id: 'car', label: '自驾', icon: Car, activeClass: 'border-primary-container bg-primary-fixed-dim text-primary'},
 ];
 
-const packingItems = reactive<PackingItem[]>([
-  {label: '相机与镜头', checked: true},
-  {label: '便携式充电器', checked: false},
-  {label: '护照', checked: true},
-]);
+const primaryTransportEvent = computed(() => {
+  return selectedTrip.value?.events.find((event) => event.eventType === 'transport') ?? null;
+});
+
+const packingItems = computed(() => selectedTrip.value?.packingItems ?? []);
+
+watch(
+  selectedTrip,
+  (trip) => {
+    if (!trip) {
+      return;
+    }
+
+    tripTitle.value = trip.title;
+    originCity.value = trip.originCity;
+    destinationCity.value = trip.destinationCity;
+    hotel.value = trip.hotelName;
+    note.value = trip.note;
+    activeTransport.value = trip.primaryTransportMode;
+    departureTime.value = primaryTransportEvent.value?.startAt.slice(11, 16) ?? '09:30';
+    arrivalTime.value = primaryTransportEvent.value?.endAt?.slice(11, 16) ?? '14:15';
+    saveState.value = 'idle';
+  },
+  {immediate: true},
+);
+
+const saveTrip = () => {
+  if (!selectedTrip.value) {
+    return;
+  }
+
+  updateTrip(selectedTrip.value.id, {
+    title: tripTitle.value.trim() || '新的旅行计划',
+    originCity: originCity.value.trim() || selectedTrip.value.originCity,
+    destinationCity: destinationCity.value.trim() || selectedTrip.value.destinationCity,
+    hotelName: hotel.value.trim(),
+    note: note.value.trim(),
+    primaryTransportMode: activeTransport.value,
+  });
+
+  if (primaryTransportEvent.value) {
+    upsertTripEvent(selectedTrip.value.id, {
+      id: primaryTransportEvent.value.id,
+      tripDayId: primaryTransportEvent.value.tripDayId,
+      eventType: primaryTransportEvent.value.eventType,
+      title: primaryTransportEvent.value.title,
+      description: primaryTransportEvent.value.description,
+      startAt: `${primaryTransportEvent.value.startAt.slice(0, 10)}T${departureTime.value}:00.000Z`,
+      endAt: `${primaryTransportEvent.value.startAt.slice(0, 10)}T${arrivalTime.value}:00.000Z`,
+      locationName: primaryTransportEvent.value.locationName,
+      address: primaryTransportEvent.value.address,
+      transportMode: activeTransport.value,
+      referenceCode: primaryTransportEvent.value.referenceCode,
+      source: primaryTransportEvent.value.source,
+      status: primaryTransportEvent.value.status,
+      meta: primaryTransportEvent.value.meta,
+    });
+  }
+
+  saveState.value = 'saved';
+};
+
+const addPackingItem = () => {
+  if (!selectedTrip.value || !newPackingItem.value.trim()) {
+    return;
+  }
+
+  upsertPackingItem(selectedTrip.value.id, {
+    label: newPackingItem.value.trim(),
+    checked: false,
+    category: 'other',
+    source: 'manual',
+    sortOrder: packingItems.value.length,
+  });
+  newPackingItem.value = '';
+  saveState.value = 'idle';
+};
 </script>
 
 <template>
   <div class="space-y-6 pb-24">
+    <section class="rounded-3xl bg-white p-4 shadow-[0_8px_24px_rgba(224,64,160,0.08)]">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary/70">当前编辑</p>
+          <h2 class="mt-1 text-2xl font-black text-zinc-900">{{ selectedTrip?.title ?? '未选择行程' }}</h2>
+        </div>
+        <select
+          :value="selectedTrip?.id"
+          class="rounded-2xl border border-pink-100 bg-rose-50 px-4 py-3 text-sm font-semibold text-zinc-900 focus:border-primary focus:outline-none"
+          @change="selectTrip(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="trip in tripList" :key="trip.id" :value="trip.id">
+            {{ trip.title }}
+          </option>
+        </select>
+      </div>
+    </section>
+
     <section class="group relative">
       <div class="absolute -inset-1 rounded-2xl bg-gradient-to-r from-primary to-secondary opacity-10 blur transition duration-1000 group-hover:opacity-20" />
       <div class="relative rounded-2xl bg-white p-6 shadow-[0_8px_32px_rgba(224,64,160,0.08)]">
-        <label class="mb-2 block px-1 text-sm font-bold text-primary">下一站去哪？</label>
+        <label class="mb-2 block px-1 text-sm font-bold text-primary">行程标题</label>
         <div class="flex items-center gap-3 rounded-full border-2 border-transparent bg-surface-variant/50 px-5 py-3 transition-all focus-within:border-primary">
-          <MapPin :size="20" class="text-tertiary" />
+          <SquarePen :size="20" class="text-tertiary" />
           <input
-            v-model="destination"
+            v-model="tripTitle"
             class="w-full border-none bg-transparent font-bold text-zinc-900 placeholder:text-outline-variant focus:ring-0"
-            placeholder="梦想目的地"
+            placeholder="给这次行程起个名字"
             type="text"
           >
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-2 gap-4">
+      <div class="rounded-2xl bg-white p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
+        <label class="mb-2 block text-[11px] font-bold uppercase tracking-widest text-primary">出发城市</label>
+        <div class="flex items-center gap-2 text-zinc-900">
+          <MapPin :size="16" class="text-primary" />
+          <input v-model="originCity" class="w-full border-none bg-transparent p-0 font-bold focus:ring-0" type="text">
+        </div>
+      </div>
+      <div class="rounded-2xl bg-white p-4 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
+        <label class="mb-2 block text-[11px] font-bold uppercase tracking-widest text-tertiary">目的地</label>
+        <div class="flex items-center gap-2 text-zinc-900">
+          <MapPin :size="16" class="text-tertiary" />
+          <input v-model="destinationCity" class="w-full border-none bg-transparent p-0 font-bold focus:ring-0" type="text">
         </div>
       </div>
     </section>
@@ -121,10 +246,19 @@ const packingItems = reactive<PackingItem[]>([
       <div class="grid grid-cols-12 gap-3">
         <div class="col-span-7 rounded-2xl bg-white p-4 shadow-[0_4px_16px_rgba(0,0,0,0.04)]">
           <div class="space-y-3">
-            <label v-for="item in packingItems" :key="item.label" class="group flex cursor-pointer items-center gap-3">
-              <input v-model="item.checked" class="h-5 w-5 rounded-full text-primary transition-all focus:ring-primary" type="checkbox">
-              <span class="text-sm font-medium text-zinc-800 transition-colors group-hover:text-primary">{{ item.label }}</span>
+            <label v-for="item in packingItems" :key="item.id" class="group flex cursor-pointer items-center gap-3">
+              <input :checked="item.checked" class="h-5 w-5 rounded-full text-primary transition-all focus:ring-primary" type="checkbox" @change="selectedTrip && togglePackingItem(selectedTrip.id, item.id)">
+              <span class="flex-1 text-sm font-medium text-zinc-800 transition-colors group-hover:text-primary">{{ item.label }}</span>
+              <button class="rounded-full bg-rose-50 p-2 text-rose-600" type="button" @click="selectedTrip && removePackingItem(selectedTrip.id, item.id)">
+                <Trash2 :size="14" />
+              </button>
             </label>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <input v-model="newPackingItem" class="flex-1 rounded-full border border-pink-100 bg-rose-50 px-4 py-2 text-sm focus:border-primary focus:outline-none" placeholder="新增清单项" type="text">
+            <button class="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white" type="button" @click="addPackingItem">
+              添加
+            </button>
           </div>
         </div>
         <div class="col-span-5 flex flex-col gap-3">
@@ -154,9 +288,9 @@ const packingItems = reactive<PackingItem[]>([
     </section>
 
     <div class="pb-8 pt-4">
-      <button class="bouncy-hover candy-shadow-primary flex w-full items-center justify-center gap-3 rounded-full bg-primary py-5 text-lg font-black text-white" type="button">
+      <button class="bouncy-hover candy-shadow-primary flex w-full items-center justify-center gap-3 rounded-full bg-primary py-5 text-lg font-black text-white" type="button" @click="saveTrip">
         <Save :size="24" />
-        保存计划
+        {{ saveState === 'saved' ? '已保存到本地计划' : '保存计划' }}
       </button>
     </div>
   </div>

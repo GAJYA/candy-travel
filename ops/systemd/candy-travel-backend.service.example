@@ -1,0 +1,17 @@
+[Unit]
+Description=CandyTravel Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/srv/candy-travel/app/backend
+EnvironmentFile=/srv/candy-travel/shared/backend.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/candy-travel/backend.log
+StandardError=append:/var/log/candy-travel/backend-error.log
+
+[Install]
+WantedBy=multi-user.target
