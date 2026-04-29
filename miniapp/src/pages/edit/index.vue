@@ -170,7 +170,7 @@ onShow(() => {
     <view class="panel">
       <text class="label">当前行程</text>
       <picker :range="tripOptions.map((trip) => trip.title)" @change="handleTripChange">
-        <view class="input picker">{{ currentTrip ? currentTrip.title : "请选择行程" }}</view>
+        <view class="input-box picker-text">{{ currentTrip ? currentTrip.title : "请选择行程" }}</view>
       </picker>
       <text v-if="errorMessage" class="status-text status-text--error">{{ errorMessage }}</text>
       <text v-else-if="loading" class="status-text">正在读取服务端计划详情…</text>
@@ -178,24 +178,34 @@ onShow(() => {
 
     <view class="panel">
       <text class="label">行程标题</text>
-      <input v-model="tripForm.title" class="input" placeholder="例如：京都樱花之旅" />
+      <view class="input-box">
+        <input v-model="tripForm.title" class="input-field" placeholder="例如：京都樱花之旅" />
+      </view>
 
       <text class="label">出发城市</text>
-      <input v-model="tripForm.originCity" class="input" placeholder="输入出发城市" />
+      <view class="input-box">
+        <input v-model="tripForm.originCity" class="input-field" placeholder="输入出发城市" />
+      </view>
 
       <text class="label">目的地</text>
-      <input v-model="tripForm.destinationCity" class="input" placeholder="输入目的地城市" />
+      <view class="input-box">
+        <input v-model="tripForm.destinationCity" class="input-field" placeholder="输入目的地城市" />
+      </view>
 
       <text class="label">交通方式</text>
       <picker :range="['flight', 'train', 'bus', 'car']" @change="tripForm.primaryTransportMode = ['flight', 'train', 'bus', 'car'][$event.detail.value] as TransportMode">
-        <view class="input picker">{{ tripForm.primaryTransportMode }}</view>
+        <view class="input-box picker-text">{{ tripForm.primaryTransportMode }}</view>
       </picker>
 
       <text class="label">酒店</text>
-      <input v-model="tripForm.hotelName" class="input" placeholder="输入酒店信息" />
+      <view class="input-box">
+        <input v-model="tripForm.hotelName" class="input-field" placeholder="输入酒店信息" />
+      </view>
 
       <text class="label">旅行笔记</text>
-      <textarea v-model="tripForm.note" class="textarea" placeholder="补充提醒、出行备注..." />
+      <view class="input-box textarea-box">
+        <textarea v-model="tripForm.note" class="input-field textarea-field" placeholder="补充提醒、出行备注..." />
+      </view>
 
       <button class="button" :loading="saving" @tap="saveTrip">保存计划</button>
     </view>
@@ -212,7 +222,9 @@ onShow(() => {
         </view>
       </view>
 
-      <input v-model="newPackingLabel.value" class="input" placeholder="新增清单项" />
+      <view class="input-box">
+        <input v-model="newPackingLabel.value" class="input-field" placeholder="新增清单项" />
+      </view>
       <button class="button button--ghost" :loading="saving" @tap="addPackingItem">添加清单项</button>
     </view>
   </view>
@@ -262,20 +274,42 @@ onShow(() => {
   color: #be123c;
 }
 
-.input,
-.picker,
-.textarea {
+/* Visual wrapper — padding lives here, not on the native input element */
+.input-box {
   width: 100%;
   margin-top: 12rpx;
   padding: 22rpx 24rpx;
   border-radius: 22rpx;
   background: #fff4fa;
-  font-size: 26rpx;
   box-sizing: border-box;
 }
 
-.textarea {
+.textarea-box {
   min-height: 140rpx;
+}
+
+/* Native input/textarea fills the wrapper with no extra padding */
+.input-field {
+  width: 100%;
+  font-size: 26rpx;
+  color: #111827;
+  line-height: 1.5;
+}
+
+.textarea-field {
+  width: 100%;
+  min-height: 96rpx;
+}
+
+/* Picker wrapper (already a view, just needs text style) */
+.picker-text {
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+/* Legacy .input class kept for the current-trip picker view */
+.input {
+  font-size: 26rpx;
 }
 
 .button {
