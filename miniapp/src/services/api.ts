@@ -120,6 +120,7 @@ type TripDayDetailsResponse = {
 };
 
 type PackingItemsResponse = {
+  tripId: string;
   items: PackingItemRecord[];
 };
 
