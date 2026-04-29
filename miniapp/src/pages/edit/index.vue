@@ -262,25 +262,20 @@ onShow(() => {
   color: #be123c;
 }
 
-.input {
-  width: 100%;
-  margin-top: 12rpx;
-  padding: 22rpx 24rpx;
-  border-radius: 22rpx;
-  background: #fff4fa;
-}
-
+.input,
 .picker,
 .textarea {
   width: 100%;
-}
-
-.textarea {
   margin-top: 12rpx;
-  min-height: 140rpx;
   padding: 22rpx 24rpx;
   border-radius: 22rpx;
   background: #fff4fa;
+  font-size: 26rpx;
+  box-sizing: border-box;
+}
+
+.textarea {
+  min-height: 140rpx;
 }
 
 .button {
