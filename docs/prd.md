@@ -113,19 +113,20 @@ CandyTravel 是一款面向**个人用户的轻量旅行规划工具**。
 
 ### 4.4 编辑页（Edit Trip）
 
-围绕一个 trip 维护：
+围绕一个 trip 维护。**V1 UI 走「摘要级」**，多事件入口留给 V1.x。
 
-- **基本信息**：title、起止日期、出发城市、目的地、主要交通方式、酒店、笔记、封面、状态
-- **日列表（trip_days）**：日期、summary、hint、highlight tag、排序
-- **事件列表（trip_events）**：交通 / 住宿 / 活动 / 提醒，含起止时间、地点、参考编号
-- **打包清单（packing_items）**：分类（证件 / 电子 / 服饰 / 药品 / 食品 / 其他）、勾选状态、排序
+- **基本信息**：title、目的地、起止日期、笔记、封面、状态
+- **去程信息**（摘要派生自首条 transport event）：出行方式（飞机 / 火车 / 巴士 / 自驾）、出发时间、到达时间
+- **入住信息**（摘要派生自首条 stay event）：酒店名、入住 / 退房日期；可整段留空表示不入住
+- **检查清单（checklist_items）**：分类（证件 / 电子 / 服饰 / 药品 / 食品 / 家居 / 宠物 / 事务 / 其他）、勾选状态、排序；新建 trip 自动从默认模板拷贝核心项
 
 **验收点**
 
-- 字段更新走 `PATCH`，不全量提交
-- 删除事件 / 日 / 打包项需二次确认
-- 起止日期变更时，越界的 trip_days 提示用户处理（保留 / 删除 / 改日期）
+- 字段更新走 `PATCH /trips/:id/summary`，不全量提交
+- 删除检查项需二次确认；摘要级 UI 不直接暴露事件软删（编辑去程/入住信息时若全部清空，后端等价于软删对应 event）
+- 起止日期变更时，若已有 events 落在新区间外，提示用户处理（保留 / 删除 / 改时间）
 - 所有写操作在前端做乐观更新，失败回滚 + toast
+- 「从模板添加」入口列出 checklist_templates 全集，用户可勾选 / 取消加入当前 trip
 
 ### 4.5 用户与认证（V1 必做）
 
@@ -157,35 +158,34 @@ CandyTravel 是一款面向**个人用户的轻量旅行规划工具**。
 ### 核心实体
 
 - `users`：openid（唯一）、unionid、nickname、avatar_url、locale、timezone
-- `trips`：聚合根，承载首页 / 日历 / 编辑三个视图
-- `trip_days`：当天摘要、提示、高亮标签
-- `trip_events`：统一承载交通 / 住宿 / 活动 / 提醒
-- `packing_items`：打包清单
-- `ai_import_jobs`：AI 抽取任务，job + commit 两段式
+- `trips`：聚合根，承载首页 / 编辑两个视图。**摘要字段（出行方式 / 出发时间 / 酒店）派生自 events，不内联**
+- `trip_events`：统一承载交通 / 住宿 / 活动 / 提醒；V1 UI 只暴露摘要级（首条 transport + 首条 stay），表层支持多事件
+- `checklist_templates`：全局检查清单种子（无 user_id），覆盖打包 / 家居 / 宠物 / 事务等
+- `checklist_items`：用户每个 trip 的检查清单实例，新建 trip 时从默认模板自动拷贝
+
+> 不引入：`trip_days`（events GROUP BY 实时算）、`ai_import_jobs`（AI 走纯函数式接口，结果直接喂前端草稿）
 
 ### 关键约束
 
-- `trips.start_date <= trips.end_date`
-- `trip_days.date` 必须在 trip 区间内
-- `trip_events.trip_id` 与其挂载的 `trip_day.trip_id` 必须一致
-- `ai_import_jobs` commit 后必须幂等
-- 所有业务表必须含 `user_id`，并以 `user_id + 主键` 建复合索引
-- 不做硬删除，使用 `deleted_at` 软删
+- `trips.start_date <= trips.end_date`（任一为空则跳过）
+- `trip_events.start_at` 必须落在 trip 区间内（业务层校验，DB 不约束因为时区换算）
+- `trip_events.end_at IS NULL OR end_at >= start_at`
+- `(checklist_items.trip_id, label)` UNIQUE，同 trip 内 label 不重复
+- 所有业务表 NOT NULL 带 `user_id`，并以 `(user_id, ...)` 复合索引
+- 软删：trips / events 用 `deleted_at`；checklist_items 硬删
 
 ### 枚举
 
 | 字段 | 取值 |
 |---|---|
 | `trip.status` | `draft / planning / confirmed / completed / archived` |
-| `trip.primary_transport_mode` | `flight / train / bus / car` |
 | `trip.created_via` | `manual / ai_import` |
 | `trip_event.event_type` | `transport / stay / activity / reminder` |
 | `trip_event.status` | `draft / confirmed / canceled` |
 | `trip_event.source` | `manual / ai_extracted` |
-| `packing_item.category` | `document / electronics / clothing / medicine / food / other` |
-| `packing_item.source` | `manual / ai_generated` |
-| `ai_import_job.input_type` | `text / image` |
-| `ai_import_job.status` | `pending / processing / parsed / committed / failed` |
+| `trip_event.meta.mode`（仅 transport） | `flight / train / bus / car` |
+| `checklist_category` | `document / electronics / clothing / medicine / food / home / pet / task / other` |
+| `checklist_item.source` | `template / manual / ai_generated` |
 
 ---
 
