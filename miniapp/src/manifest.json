@@ -1,0 +1,19 @@
+{
+    "name": "CandyTravel",
+    "appid": "wx144d912364962c31",
+    "description": "个人旅行规划工具",
+    "versionName": "0.1.0",
+    "versionCode": "100",
+    "transformPx": false,
+    "mp-weixin": {
+        "appid": "wx144d912364962c31",
+        "setting": {
+            "urlCheck": false
+        },
+        "usingComponents": true
+    },
+    "uniStatistics": {
+        "enable": false
+    },
+    "vueVersion": "3"
+}
