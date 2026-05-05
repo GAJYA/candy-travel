@@ -2,7 +2,7 @@
   <view class="page">
     <view class="editor-top">
       <text class="brand">Candy Travel</text>
-      <text class="editor-label">Trip Editor</text>
+      <text class="editor-label">{{ editorLabel }}</text>
     </view>
 
     <view class="trip-hero">
@@ -38,8 +38,8 @@
       </view>
     </view>
 
-    <!-- 出发安排 -->
-    <view class="time-row">
+    <!-- 行程日期 -->
+    <view class="date-row">
       <view class="candy-card time-card">
         <text class="time-label">出发日期</text>
         <view class="time-control">
@@ -55,6 +55,25 @@
         </view>
       </view>
       <view class="candy-card time-card">
+        <text class="time-label">结束日期</text>
+        <view class="time-control">
+          <text class="time-icon">🏁</text>
+          <picker
+            mode="date"
+            :value="form.endDate"
+            :start="form.departDate || undefined"
+            @change="onEndDateChange"
+            class="time-picker"
+          >
+            <text class="time-value">{{ form.endDate || '选择日期' }}</text>
+          </picker>
+        </view>
+      </view>
+    </view>
+
+    <!-- 出发时间 -->
+    <view class="time-row">
+      <view class="candy-card time-card time-card--wide">
         <text class="time-label">出发时间</text>
         <view class="time-control">
           <text class="time-icon">🕐</text>
@@ -90,7 +109,10 @@
         <text class="section-title">准备好了吗？</text>
       </view>
       <view class="candy-card checklist">
-        <view v-if="checklistItems.length === 0" class="empty-checklist">
+        <view v-if="!tripId" class="empty-checklist">
+          <text class="candy-text-muted">保存行程后可编辑检查清单</text>
+        </view>
+        <view v-else-if="checklistItems.length === 0" class="empty-checklist">
           <text class="candy-text-muted">暂无检查项</text>
         </view>
         <view
@@ -106,8 +128,12 @@
           <text class="check-cat">{{ catLabels[item.category] }}</text>
         </view>
 
-        <button class="candy-btn candy-btn--ghost add-btn" @click="onShowAdd">
-          ＋ 添加检查项
+        <button
+          class="candy-btn candy-btn--ghost add-btn"
+          :disabled="!tripId"
+          @click="onShowAdd"
+        >
+          {{ tripId ? '＋ 添加检查项' : '保存后添加检查项' }}
         </button>
       </view>
     </view>
@@ -137,12 +163,15 @@
     </button>
 
     <button
+      v-if="tripId"
       class="delete-btn"
       :disabled="saving || deleting"
       @click="onDelete"
     >
       {{ deleting ? '删除中…' : '删除这次旅行' }}
     </button>
+
+    <CandyBottomNav :before-navigate="confirmLeaveIfDirty" />
 
     <!-- 添加检查项弹层 -->
     <view v-if="addOpen" class="modal-mask" @click="addOpen = false">
@@ -177,8 +206,9 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onBackPress, onLoad, onShow } from '@dcloudio/uni-app'
 
+import CandyBottomNav from '../../components/CandyBottomNav.vue'
 import type { TransportMode, TripDetail } from '../../services/trip'
 import { tripApi } from '../../services/trip'
 import {
@@ -197,11 +227,14 @@ const deleting = ref(false)
 const addOpen = ref(false)
 const addLabel = ref('')
 const addCategory = ref<ChecklistCategory>('other')
+const pristineSnapshot = ref('')
+const allowLeave = ref(false)
 
 interface FormState {
   title: string
   transportMode: TransportMode
   departDate: string
+  endDate: string
   departTime: string
   hotelName: string
   note: string
@@ -211,10 +244,13 @@ const form = reactive<FormState>({
   title: '',
   transportMode: 'flight',
   departDate: '',
+  endDate: '',
   departTime: '',
   hotelName: '',
   note: '',
 })
+
+const editorLabel = computed(() => (tripId.value ? 'Trip Editor' : 'New Trip'))
 
 const modes: Array<{ value: TransportMode; icon: string; label: string }> = [
   { value: 'flight', icon: '✈️', label: '飞机' },
@@ -227,11 +263,23 @@ onLoad((opts?: Record<string, string | undefined>) => {
   if (opts?.id) {
     tripId.value = opts.id
     void load()
+  } else {
+    initNewTrip()
   }
 })
 
 onShow(() => {
-  if (tripId.value) void load()
+  if (tripId.value && !hasUnsavedChanges()) void load()
+})
+
+onBackPress(() => {
+  if (allowLeave.value || !hasUnsavedChanges()) return false
+  void confirmLeaveIfDirty().then((ok) => {
+    if (!ok) return
+    allowLeave.value = true
+    uni.navigateBack()
+  })
+  return true
 })
 
 const load = async () => {
@@ -239,13 +287,33 @@ const load = async () => {
     trip.value = await tripApi.get(tripId.value)
     syncFormFromTrip(trip.value)
     checklistItems.value = await checklistApi.list(tripId.value)
+    markPristine()
   } catch (e) {
     uni.showToast({ title: '加载失败', icon: 'none' })
   }
 }
 
+const initNewTrip = () => {
+  tripId.value = ''
+  trip.value = null
+  checklistItems.value = []
+  form.title = '新的旅行'
+  form.transportMode = 'flight'
+  form.departDate = ''
+  form.endDate = ''
+  form.departTime = ''
+  form.hotelName = ''
+  form.note = ''
+  markPristine()
+}
+
 const syncFormFromTrip = (t: TripDetail) => {
   form.title = t.title
+  form.transportMode = 'flight'
+  form.departDate = ''
+  form.endDate = ''
+  form.departTime = ''
+  form.hotelName = ''
   form.note = t.note || ''
   if (t.summary.transport) {
     form.transportMode = (t.summary.transport.mode as TransportMode) || 'flight'
@@ -258,14 +326,37 @@ const syncFormFromTrip = (t: TripDetail) => {
   } else if (t.startDate) {
     form.departDate = t.startDate
   }
+  form.endDate = t.endDate || ''
   form.hotelName = t.summary.stay?.hotelName || ''
 }
+
+const formSnapshot = () => JSON.stringify({
+  title: form.title,
+  transportMode: form.transportMode,
+  departDate: form.departDate,
+  endDate: form.endDate,
+  departTime: form.departTime,
+  hotelName: form.hotelName,
+  note: form.note,
+})
+
+const markPristine = () => {
+  pristineSnapshot.value = formSnapshot()
+}
+
+const hasUnsavedChanges = () => pristineSnapshot.value !== formSnapshot()
 
 const formatDate = (d: Date) => d.toISOString().slice(0, 10)
 const formatTime = (d: Date) => d.toTimeString().slice(0, 5)
 
 const onDepartDateChange = (e: any) => {
   form.departDate = e.detail.value
+  if (form.endDate && form.endDate < form.departDate) {
+    form.endDate = form.departDate
+  }
+}
+const onEndDateChange = (e: any) => {
+  form.endDate = e.detail.value
 }
 const onDepartTimeChange = (e: any) => {
   form.departTime = e.detail.value
@@ -279,13 +370,26 @@ const buildIsoDateTime = (date: string, time: string): string | null => {
 }
 
 const onSave = async () => {
-  if (!tripId.value) return
+  await saveTrip()
+}
+
+const saveTrip = async (options: { redirectNew?: boolean } = {}): Promise<boolean> => {
+  const redirectNew = options.redirectNew ?? true
   if (!form.title.trim()) {
     uni.showToast({ title: '请填写行程名', icon: 'none' })
-    return
+    return false
+  }
+  if (form.endDate && !form.departDate) {
+    uni.showToast({ title: '请先选择出发日期', icon: 'none' })
+    return false
+  }
+  if (form.departDate && form.endDate && form.endDate < form.departDate) {
+    uni.showToast({ title: '结束日期不能早于出发日期', icon: 'none' })
+    return false
   }
   saving.value = true
   try {
+    const wasNewTrip = !tripId.value
     const departIso = buildIsoDateTime(form.departDate, form.departTime)
 
     const payload: any = {
@@ -312,14 +416,60 @@ const onSave = async () => {
     if (form.departDate) {
       payload.startDate = form.departDate
     }
+    payload.endDate = form.endDate || null
+
+    if (wasNewTrip) {
+      const created = await tripApi.create({
+        title: payload.title,
+        note: payload.note,
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+      })
+      tripId.value = created.id
+    }
 
     trip.value = await tripApi.patchSummary(tripId.value, payload)
+    if (wasNewTrip) {
+      checklistItems.value = await checklistApi.list(tripId.value)
+    }
+    markPristine()
     uni.showToast({ title: '已保存', icon: 'success' })
+    if (wasNewTrip && redirectNew) {
+      allowLeave.value = true
+      uni.redirectTo({ url: `/pages/edit/index?id=${tripId.value}` })
+    }
+    return true
   } catch (e) {
     uni.showToast({ title: '保存失败', icon: 'none' })
+    return false
   } finally {
     saving.value = false
   }
+}
+
+const confirmLeaveIfDirty = async (): Promise<boolean> => {
+  if (allowLeave.value || !hasUnsavedChanges()) return true
+  return new Promise((resolve) => {
+    uni.showModal({
+      title: '保存更改？',
+      content: '当前行程有未保存的修改，是否先保存再离开？',
+      cancelText: '不保存',
+      confirmText: '保存',
+      confirmColor: '#e040a0',
+      success: (res) => {
+        if (!res.confirm) {
+          allowLeave.value = true
+          resolve(true)
+          return
+        }
+        void saveTrip({ redirectNew: false }).then((ok) => {
+          if (ok) allowLeave.value = true
+          resolve(ok)
+        })
+      },
+      fail: () => resolve(false),
+    })
+  })
 }
 
 const onDelete = () => {
@@ -339,6 +489,7 @@ const deleteTrip = async () => {
   deleting.value = true
   try {
     await tripApi.delete(tripId.value)
+    allowLeave.value = true
     uni.showToast({ title: '已删除', icon: 'success' })
     uni.redirectTo({ url: '/pages/index/index' })
   } catch {
@@ -360,6 +511,10 @@ const toggleChecked = async (item: ChecklistItem) => {
 }
 
 const onShowAdd = () => {
+  if (!tripId.value) {
+    uni.showToast({ title: '请先保存行程', icon: 'none' })
+    return
+  }
   addLabel.value = ''
   addCategory.value = 'other'
   addOpen.value = true
@@ -382,7 +537,8 @@ const onAddSubmit = async () => {
 
 <style lang="scss">
 .page {
-  padding: $candy-space-md $candy-gutter 200rpx;
+  padding: $candy-space-md $candy-gutter 220rpx;
+  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: $candy-space-md;
@@ -507,7 +663,8 @@ const onAddSubmit = async () => {
   font-weight: 600;
 }
 
-/* 出发安排 */
+/* 行程日期 / 出发时间 */
+.date-row,
 .time-row {
   display: flex;
   flex-direction: row;
@@ -521,6 +678,9 @@ const onAddSubmit = async () => {
   padding: $candy-space-sm;
   background: $candy-secondary-fixed;
   border-radius: $candy-radius-md;
+}
+.time-card--wide {
+  background: $candy-primary-fixed;
 }
 .time-label {
   font-size: $candy-font-label-md;
@@ -616,6 +776,10 @@ const onAddSubmit = async () => {
 }
 .add-btn {
   margin-top: $candy-space-xs;
+}
+.add-btn[disabled] {
+  color: $candy-on-surface-variant;
+  opacity: 0.58;
 }
 
 /* 笔记 */

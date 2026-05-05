@@ -125,6 +125,8 @@
         </view>
       </view>
     </view>
+
+    <CandyBottomNav active="home" />
   </view>
 </template>
 
@@ -132,8 +134,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 
-import { ApiRequestError } from '../../services/api'
-import { tripApi, type Trip } from '../../services/trip'
+import CandyBottomNav from '../../components/CandyBottomNav.vue'
+import type { Trip } from '../../services/trip'
 import { useAuthStore } from '../../stores/auth'
 import { useTripStore } from '../../stores/trip'
 
@@ -205,18 +207,8 @@ const login = async () => {
 }
 
 const onCreate = async () => {
-  let createdId = ''
-  try {
-    const created = await tripApi.create({ title: '新的旅行' })
-    createdId = created.id
-  } catch (e) {
-    uni.showToast({ title: createErrorMessage(e), icon: 'none' })
-    return
-  }
-
-  void trip.loadList()
   uni.navigateTo({
-    url: `/pages/edit/index?id=${createdId}`,
+    url: '/pages/edit/index?mode=create',
     fail: (err) => {
       uni.showToast({ title: err.errMsg || '打开编辑页失败', icon: 'none' })
     },
@@ -230,16 +222,6 @@ const onOpen = (id: string) => {
 const refreshIfAuthed = async () => {
   await auth.bootstrap()
   if (auth.isAuthenticated) await trip.loadList()
-}
-
-const createErrorMessage = (e: unknown): string => {
-  if (e instanceof ApiRequestError) {
-    if (e.statusCode === 401) return '登录已失效，请重新登录'
-    if (e.statusCode === 0) return '无法连接后端服务'
-    return `新建失败：${e.message}`
-  }
-  if (e instanceof Error) return `新建失败：${e.message}`
-  return '新建失败'
 }
 
 onMounted(() => {
@@ -257,7 +239,8 @@ onUnmounted(() => {
 <style lang="scss">
 .page {
   min-height: 100vh;
-  padding: 36rpx $candy-gutter $candy-space-lg;
+  padding: 36rpx $candy-gutter 220rpx;
+  padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: $candy-space-md;
