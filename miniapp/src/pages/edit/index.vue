@@ -89,17 +89,64 @@
       </view>
     </view>
 
-    <!-- 入住酒店 -->
-    <view class="candy-card section stay-card">
-      <view class="section-head">
-        <text class="section-emoji">🏨</text>
-        <text class="section-title">入住酒店</text>
+    <!-- 每日行程 -->
+    <view class="section">
+      <view class="section-head section-head--split">
+        <view class="section-title-row">
+          <text class="section-emoji">🧭</text>
+          <text class="section-title">每日行程</text>
+        </view>
+        <button
+          class="mini-action"
+          :disabled="!tripId"
+          @click="onShowEventAdd"
+        >
+          ＋ 添加事件
+        </button>
       </view>
-      <input
-        class="hotel-input"
-        v-model="form.hotelName"
-        placeholder="酒店名称（可留空表示不入住）"
-      />
+
+      <view class="candy-card event-panel">
+        <view v-if="!tripId" class="empty-events">
+          <text class="empty-events__title">保存行程后可添加事件</text>
+          <text class="empty-events__hint">选择图标，记录任意安排</text>
+        </view>
+        <view v-else-if="eventLoading" class="empty-events">
+          <text class="empty-events__hint">加载行程事件...</text>
+        </view>
+        <view v-else-if="eventGroups.length === 0" class="empty-events">
+          <text class="empty-events__title">还没有具体行程</text>
+          <text class="empty-events__hint">添加当天要做的事、预约或地点</text>
+        </view>
+        <view v-else class="event-groups">
+          <view
+            v-for="group in eventGroups"
+            :key="group.date"
+            class="event-day"
+          >
+            <view class="event-day__head">
+              <text class="event-day__date">{{ formatEventDate(group.date) }}</text>
+              <text class="event-day__count">{{ group.events.length }} 项</text>
+            </view>
+            <view
+              v-for="event in group.events"
+              :key="event.id"
+              class="event-card"
+              @click="onEditEvent(event)"
+            >
+              <view class="event-icon-badge">
+                <text>{{ eventIcon(event) }}</text>
+              </view>
+              <view class="event-body">
+                <text class="event-title">{{ event.title }}</text>
+                <text class="event-time">{{ eventTimeRange(event) }}</text>
+                <text v-if="event.locationName" class="event-meta">📍 {{ event.locationName }}</text>
+                <text v-if="event.note" class="event-meta">{{ event.note }}</text>
+              </view>
+              <button v-if="canDeleteEvent(event)" class="event-delete" @click.stop="onDeleteEvent(event.id)">×</button>
+            </view>
+          </view>
+        </view>
+      </view>
     </view>
 
     <!-- 准备好了吗？检查清单 -->
@@ -126,6 +173,7 @@
           </view>
           <text class="check-label" :class="{ 'check-label--done': item.checked }">{{ item.label }}</text>
           <text class="check-cat">{{ catLabels[item.category] }}</text>
+          <button class="check-delete" @click.stop="onDeleteChecklistItem(item)">×</button>
         </view>
 
         <button
@@ -173,6 +221,81 @@
 
     <CandyBottomNav :before-navigate="confirmLeaveIfDirty" />
 
+    <!-- 添加事件弹层 -->
+    <view v-if="eventAddOpen" class="modal-mask" @click="eventAddOpen = false">
+      <view class="modal" @click.stop>
+        <text class="modal-title">{{ eventEditingId ? '编辑事件' : '添加事件' }}</text>
+        <text class="modal-field-label">选择图标</text>
+        <view class="event-icon-grid">
+          <view
+            v-for="icon in eventIcons"
+            :key="icon"
+            class="event-icon-choice"
+            :class="{ 'event-icon-choice--active': eventForm.icon === icon }"
+            @click="eventForm.icon = icon"
+          >
+            <text>{{ icon }}</text>
+          </view>
+        </view>
+        <input
+          class="candy-input modal-input"
+          v-model="eventForm.title"
+          placeholder="事件名称，例如：在樱屋吃午餐"
+        />
+        <view class="event-form-row">
+          <view class="event-form-cell">
+            <text class="modal-field-label">日期</text>
+            <picker
+              mode="date"
+              :value="eventForm.date"
+              :start="form.departDate || undefined"
+              :end="form.endDate || undefined"
+              @change="onEventDateChange"
+            >
+              <text class="event-picker-value">{{ eventForm.date || '选择日期' }}</text>
+            </picker>
+          </view>
+          <view class="event-form-cell">
+            <text class="modal-field-label">开始</text>
+            <picker
+              mode="time"
+              :value="eventForm.startTime"
+              @change="onEventStartTimeChange"
+            >
+              <text class="event-picker-value">{{ eventForm.startTime || '选择时间' }}</text>
+            </picker>
+          </view>
+          <view class="event-form-cell">
+            <text class="modal-field-label">结束</text>
+            <picker
+              mode="time"
+              :value="eventForm.endTime"
+              @change="onEventEndTimeChange"
+            >
+              <text class="event-picker-value">{{ eventForm.endTime || '可选' }}</text>
+            </picker>
+          </view>
+        </view>
+        <input
+          class="candy-input modal-input"
+          v-model="eventForm.locationName"
+          placeholder="地点，例如：东京国立博物馆"
+        />
+        <textarea
+          class="note-input event-note-input"
+          v-model="eventForm.note"
+          placeholder="备注，可选"
+          :auto-height="true"
+        />
+        <view class="modal-actions">
+          <button class="candy-btn candy-btn--ghost" @click="eventAddOpen = false">取消</button>
+          <button class="candy-btn candy-btn--primary" :disabled="!eventForm.title" @click="onEventAddSubmit">
+            {{ eventEditingId ? '保存事件' : '加入行程' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
     <!-- 添加检查项弹层 -->
     <view v-if="addOpen" class="modal-mask" @click="addOpen = false">
       <view class="modal" @click.stop>
@@ -217,10 +340,15 @@ import {
   type ChecklistItem,
   checklistApi,
 } from '../../services/checklist'
+import {
+  tripEventApi,
+  type TripEvent,
+} from '../../services/trip-event'
 
 const tripId = ref<string>('')
 const trip = ref<TripDetail | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
+const tripEvents = ref<TripEvent[]>([])
 
 const saving = ref(false)
 const deleting = ref(false)
@@ -229,6 +357,19 @@ const addLabel = ref('')
 const addCategory = ref<ChecklistCategory>('other')
 const pristineSnapshot = ref('')
 const allowLeave = ref(false)
+const eventLoading = ref(false)
+const eventAddOpen = ref(false)
+const eventEditingId = ref<string>('')
+
+interface EventFormState {
+  icon: string
+  title: string
+  date: string
+  startTime: string
+  endTime: string
+  locationName: string
+  note: string
+}
 
 interface FormState {
   title: string
@@ -236,7 +377,6 @@ interface FormState {
   departDate: string
   endDate: string
   departTime: string
-  hotelName: string
   note: string
 }
 
@@ -246,11 +386,40 @@ const form = reactive<FormState>({
   departDate: '',
   endDate: '',
   departTime: '',
-  hotelName: '',
   note: '',
 })
 
 const editorLabel = computed(() => (tripId.value ? 'Trip Editor' : 'New Trip'))
+
+const eventIcons = [
+  '🏨', '✈️', '🚄', '🚌', '🚗', '🚕', '🚢',
+  '🍽️', '☕', '🍰', '🎣', '🏖️', '🏛️', '🌿',
+  '🛍️', '🎫', '📸', '💆', '🧳', '📌', '⏰', '✨',
+]
+
+const eventForm = reactive<EventFormState>({
+  icon: '📌',
+  title: '',
+  date: '',
+  startTime: '',
+  endTime: '',
+  locationName: '',
+  note: '',
+})
+
+const eventGroups = computed(() => {
+  const groups = new Map<string, TripEvent[]>()
+  const sorted = [...tripEvents.value].sort((a, b) => (
+    new Date(a.startAt).getTime() - new Date(b.startAt).getTime() || a.sortOrder - b.sortOrder
+  ))
+  sorted.forEach((event) => {
+    const date = datePart(event.startAt)
+    const list = groups.get(date) || []
+    list.push(event)
+    groups.set(date, list)
+  })
+  return [...groups.entries()].map(([date, events]) => ({ date, events }))
+})
 
 const modes: Array<{ value: TransportMode; icon: string; label: string }> = [
   { value: 'flight', icon: '✈️', label: '飞机' },
@@ -287,9 +456,22 @@ const load = async () => {
     trip.value = await tripApi.get(tripId.value)
     syncFormFromTrip(trip.value)
     checklistItems.value = await checklistApi.list(tripId.value)
+    await loadEvents()
     markPristine()
   } catch (e) {
     uni.showToast({ title: '加载失败', icon: 'none' })
+  }
+}
+
+const loadEvents = async () => {
+  if (!tripId.value) return
+  eventLoading.value = true
+  try {
+    tripEvents.value = await tripEventApi.list(tripId.value)
+  } catch {
+    uni.showToast({ title: '行程事件加载失败', icon: 'none' })
+  } finally {
+    eventLoading.value = false
   }
 }
 
@@ -297,12 +479,12 @@ const initNewTrip = () => {
   tripId.value = ''
   trip.value = null
   checklistItems.value = []
+  tripEvents.value = []
   form.title = '新的旅行'
   form.transportMode = 'flight'
   form.departDate = ''
   form.endDate = ''
   form.departTime = ''
-  form.hotelName = ''
   form.note = ''
   markPristine()
 }
@@ -313,7 +495,6 @@ const syncFormFromTrip = (t: TripDetail) => {
   form.departDate = ''
   form.endDate = ''
   form.departTime = ''
-  form.hotelName = ''
   form.note = t.note || ''
   if (t.summary.transport) {
     form.transportMode = (t.summary.transport.mode as TransportMode) || 'flight'
@@ -327,7 +508,6 @@ const syncFormFromTrip = (t: TripDetail) => {
     form.departDate = t.startDate
   }
   form.endDate = t.endDate || ''
-  form.hotelName = t.summary.stay?.hotelName || ''
 }
 
 const formSnapshot = () => JSON.stringify({
@@ -336,7 +516,6 @@ const formSnapshot = () => JSON.stringify({
   departDate: form.departDate,
   endDate: form.endDate,
   departTime: form.departTime,
-  hotelName: form.hotelName,
   note: form.note,
 })
 
@@ -348,6 +527,38 @@ const hasUnsavedChanges = () => pristineSnapshot.value !== formSnapshot()
 
 const formatDate = (d: Date) => d.toISOString().slice(0, 10)
 const formatTime = (d: Date) => d.toTimeString().slice(0, 5)
+const datePart = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const formatEventDate = (date: string) => {
+  const [, month, day] = date.split('-')
+  return `${Number(month)}月${Number(day)}日`
+}
+
+const formatEventTime = (iso: string) => {
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const eventIcon = (event: TripEvent) => {
+  if (typeof event.meta?.icon === 'string' && event.meta.icon) return event.meta.icon
+  if (event.eventType === 'transport') {
+    const mode = event.meta?.mode
+    return ({ flight: '✈️', train: '🚄', bus: '🚌', car: '🚗' }[String(mode)] || '✈️')
+  }
+  return ({ stay: '🏨', activity: '📌', reminder: '⏰' }[event.eventType] || '📌')
+}
+
+const eventTimeRange = (event: TripEvent) => {
+  const start = formatEventTime(event.startAt)
+  if (!event.endAt) return start
+  return `${start} - ${formatEventTime(event.endAt)}`
+}
+
+const canDeleteEvent = (event: TripEvent) => Boolean(event.meta?.icon) || ['activity', 'reminder'].includes(event.eventType)
+const canEditEvent = canDeleteEvent
 
 const onDepartDateChange = (e: any) => {
   form.departDate = e.detail.value
@@ -405,14 +616,6 @@ const saveTrip = async (options: { redirectNew?: boolean } = {}): Promise<boolea
         arriveAt: null,
       }
     }
-    if (form.hotelName.trim()) {
-      payload.stay = {
-        hotelName: form.hotelName.trim(),
-        checkinAt: departIso,
-      }
-    } else {
-      payload.stay = null
-    }
     if (form.departDate) {
       payload.startDate = form.departDate
     }
@@ -431,6 +634,7 @@ const saveTrip = async (options: { redirectNew?: boolean } = {}): Promise<boolea
     trip.value = await tripApi.patchSummary(tripId.value, payload)
     if (wasNewTrip) {
       checklistItems.value = await checklistApi.list(tripId.value)
+      tripEvents.value = []
     }
     markPristine()
     uni.showToast({ title: '已保存', icon: 'success' })
@@ -499,6 +703,157 @@ const deleteTrip = async () => {
   }
 }
 
+const resetEventForm = () => {
+  eventEditingId.value = ''
+  eventForm.icon = '📌'
+  eventForm.title = ''
+  eventForm.date = form.departDate || datePart(new Date().toISOString())
+  eventForm.startTime = ''
+  eventForm.endTime = ''
+  eventForm.locationName = ''
+  eventForm.note = ''
+}
+
+const onShowEventAdd = async () => {
+  if (!tripId.value) {
+    uni.showToast({ title: '请先保存行程', icon: 'none' })
+    return
+  }
+  if (!form.departDate) {
+    uni.showToast({ title: '请先设置出发日期', icon: 'none' })
+    return
+  }
+  if (hasUnsavedChanges()) {
+    uni.showModal({
+      title: '先保存行程？',
+      content: '添加事件前需要保存当前行程日期和标题。',
+      confirmText: '保存',
+      confirmColor: '#e040a0',
+      success: (res) => {
+        if (!res.confirm) return
+        void saveTrip({ redirectNew: false }).then((ok) => {
+          if (!ok) return
+          resetEventForm()
+          eventAddOpen.value = true
+        })
+      },
+    })
+    return
+  }
+  resetEventForm()
+  eventAddOpen.value = true
+}
+
+const onEditEvent = (event: TripEvent) => {
+  if (!canEditEvent(event)) {
+    uni.showToast({ title: '交通信息请在上方修改', icon: 'none' })
+    return
+  }
+  eventEditingId.value = event.id
+  eventForm.icon = eventIcon(event)
+  eventForm.title = event.title
+  eventForm.date = datePart(event.startAt)
+  eventForm.startTime = formatEventTime(event.startAt)
+  eventForm.endTime = event.endAt ? formatEventTime(event.endAt) : ''
+  eventForm.locationName = event.locationName || ''
+  eventForm.note = event.note || ''
+  eventAddOpen.value = true
+}
+
+const onEventDateChange = (e: any) => {
+  eventForm.date = e.detail.value
+}
+
+const onEventStartTimeChange = (e: any) => {
+  eventForm.startTime = e.detail.value
+}
+
+const onEventEndTimeChange = (e: any) => {
+  eventForm.endTime = e.detail.value
+}
+
+const validateEventForm = () => {
+  if (!eventForm.title.trim()) return '请填写事件名称'
+  if (!eventForm.date) return '请选择日期'
+  if (!eventForm.startTime) return '请选择开始时间'
+  const tripEnd = form.endDate || form.departDate
+  if (form.departDate && eventForm.date < form.departDate) return '事件日期不能早于出发日期'
+  if (tripEnd && eventForm.date > tripEnd) return '事件日期不能晚于结束日期'
+  if (eventForm.endTime && eventForm.endTime < eventForm.startTime) return '结束时间不能早于开始时间'
+  return ''
+}
+
+const onEventAddSubmit = async () => {
+  const error = validateEventForm()
+  if (error) {
+    uni.showToast({ title: error, icon: 'none' })
+    return
+  }
+  const startAt = buildIsoDateTime(eventForm.date, eventForm.startTime)
+  if (!startAt) return
+  const endAt = eventForm.endTime ? buildIsoDateTime(eventForm.date, eventForm.endTime) : null
+  try {
+    if (eventEditingId.value) {
+      const updated = await tripEventApi.patch(eventEditingId.value, {
+        title: eventForm.title.trim(),
+        startAt,
+        endAt,
+        locationName: eventForm.locationName.trim() || null,
+        note: eventForm.note.trim() || null,
+        meta: { icon: eventForm.icon },
+      })
+      tripEvents.value = tripEvents.value.map((event) => (
+        event.id === updated.id ? updated : event
+      ))
+      eventAddOpen.value = false
+      eventEditingId.value = ''
+      uni.showToast({ title: '已保存', icon: 'success' })
+      return
+    }
+
+    const created = await tripEventApi.create(tripId.value, {
+      eventType: 'activity',
+      title: eventForm.title.trim(),
+      startAt,
+      endAt,
+      locationName: eventForm.locationName.trim() || null,
+      note: eventForm.note.trim() || null,
+      meta: { icon: eventForm.icon },
+      status: 'confirmed',
+      sortOrder: tripEvents.value.length,
+    })
+    tripEvents.value.push(created)
+    eventAddOpen.value = false
+    eventEditingId.value = ''
+    uni.showToast({ title: '已添加', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '添加失败', icon: 'none' })
+  }
+}
+
+const onDeleteEvent = (eventId: string) => {
+  uni.showModal({
+    title: '删除事件',
+    content: '确定从每日行程中移除这个事件吗？',
+    confirmText: '删除',
+    confirmColor: '#ba1a1a',
+    success: (res) => {
+      if (!res.confirm) return
+      void deleteEvent(eventId)
+    },
+  })
+}
+
+const deleteEvent = async (eventId: string) => {
+  try {
+    await tripEventApi.delete(eventId)
+    tripEvents.value = tripEvents.value.filter((event) => event.id !== eventId)
+    uni.showToast({ title: '已删除', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '删除失败', icon: 'none' })
+  }
+}
+
 const toggleChecked = async (item: ChecklistItem) => {
   const next = !item.checked
   item.checked = next  // 乐观更新
@@ -507,6 +862,29 @@ const toggleChecked = async (item: ChecklistItem) => {
   } catch {
     item.checked = !next
     uni.showToast({ title: '更新失败', icon: 'none' })
+  }
+}
+
+const onDeleteChecklistItem = (item: ChecklistItem) => {
+  uni.showModal({
+    title: '移除检查项',
+    content: `确定移除「${item.label}」吗？`,
+    confirmText: '移除',
+    confirmColor: '#ba1a1a',
+    success: (res) => {
+      if (!res.confirm) return
+      void deleteChecklistItem(item.id)
+    },
+  })
+}
+
+const deleteChecklistItem = async (itemId: string) => {
+  try {
+    await checklistApi.delete(itemId)
+    checklistItems.value = checklistItems.value.filter((item) => item.id !== itemId)
+    uni.showToast({ title: '已移除', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '移除失败', icon: 'none' })
   }
 }
 
@@ -591,6 +969,15 @@ const onAddSubmit = async () => {
   gap: $candy-space-sm;
 }
 .section-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: $candy-space-xs;
+}
+.section-head--split {
+  justify-content: space-between;
+}
+.section-title-row {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -707,16 +1094,146 @@ const onAddSubmit = async () => {
   color: $candy-on-surface;
 }
 
-/* 酒店 */
-.stay-card {
-  background: $candy-secondary-fixed;
-}
-.hotel-input {
-  background: $candy-surface-container-lowest;
+/* 每日行程 */
+.mini-action {
+  margin: 0;
+  min-width: 156rpx;
+  height: 58rpx;
+  line-height: 58rpx;
+  padding: 0 20rpx;
   border-radius: $candy-radius-full;
-  padding: 20rpx $candy-space-sm;
+  background: $candy-primary;
+  color: $candy-on-primary;
+  font-size: $candy-font-label-md;
+  font-weight: 700;
+  box-shadow: 0 8rpx 20rpx rgba(224, 64, 160, 0.18);
+}
+.mini-action::after {
+  border: none;
+}
+.mini-action[disabled] {
+  background: $candy-outline-variant;
+  color: $candy-on-surface-variant;
+  box-shadow: none;
+}
+.event-panel {
+  display: flex;
+  flex-direction: column;
+  gap: $candy-space-sm;
+  padding: 20rpx;
+  background: rgba(255, 255, 255, 0.82);
+}
+.empty-events {
+  min-height: 168rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  text-align: center;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-low;
+}
+.empty-events__title {
   font-size: $candy-font-body-lg;
+  font-weight: 800;
   color: $candy-on-surface;
+}
+.empty-events__hint {
+  font-size: $candy-font-body-md;
+  color: $candy-on-surface-variant;
+}
+.event-groups {
+  display: flex;
+  flex-direction: column;
+  gap: $candy-space-sm;
+}
+.event-day {
+  display: flex;
+  flex-direction: column;
+  gap: $candy-space-xs;
+}
+.event-day__head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8rpx;
+}
+.event-day__date {
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+  color: $candy-on-surface;
+}
+.event-day__count {
+  font-size: $candy-font-label-md;
+  color: $candy-on-surface-variant;
+}
+.event-card {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 18rpx;
+  padding: 22rpx 58rpx 22rpx 22rpx;
+  border-radius: 34rpx;
+  background: $candy-surface-container-lowest;
+  box-shadow: 0 8rpx 22rpx rgba(96, 72, 104, 0.07);
+}
+.event-card:active {
+  background: $candy-surface-container-low;
+}
+.event-icon-badge {
+  flex: 0 0 64rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $candy-primary-fixed;
+  font-size: 34rpx;
+}
+.event-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+.event-title {
+  min-width: 0;
+  color: $candy-on-surface;
+  font-size: $candy-font-body-lg;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.event-time {
+  color: $candy-primary;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.event-meta {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+}
+.event-delete {
+  position: absolute;
+  top: 14rpx;
+  right: 14rpx;
+  width: 42rpx;
+  height: 42rpx;
+  line-height: 38rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: $candy-on-surface-variant;
+  font-size: 32rpx;
+}
+.event-delete::after {
+  border: none;
 }
 
 /* 检查清单 */
@@ -768,11 +1285,26 @@ const onAddSubmit = async () => {
   color: $candy-on-surface-variant;
 }
 .check-cat {
+  flex: 0 0 auto;
   font-size: $candy-font-label-md;
   color: $candy-on-secondary-fixed-variant;
   background: $candy-secondary-fixed;
   padding: 4rpx 16rpx;
   border-radius: $candy-radius-full;
+}
+.check-delete {
+  flex: 0 0 42rpx;
+  width: 42rpx;
+  height: 42rpx;
+  line-height: 38rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: $candy-on-surface-variant;
+  font-size: 32rpx;
+}
+.check-delete::after {
+  border: none;
 }
 .add-btn {
   margin-top: $candy-space-xs;
@@ -853,8 +1385,55 @@ const onAddSubmit = async () => {
   font-weight: 700;
   color: $candy-on-surface;
 }
+.event-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: $candy-space-xs;
+}
+.event-icon-choice {
+  height: 72rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $candy-surface-container;
+  border: 3rpx solid transparent;
+  font-size: 34rpx;
+}
+.event-icon-choice--active {
+  background: $candy-primary-fixed;
+  border-color: $candy-primary;
+  box-shadow: 0 8rpx 20rpx rgba(224, 64, 160, 0.16);
+}
 .modal-input {
   width: 100%;
+}
+.modal-field-label {
+  font-size: 20rpx;
+  font-weight: 800;
+  color: $candy-on-surface-variant;
+}
+.event-form-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: $candy-space-xs;
+}
+.event-form-cell {
+  min-width: 0;
+  padding: 14rpx 16rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-low;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.event-picker-value {
+  color: $candy-on-surface;
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+}
+.event-note-input {
+  min-height: 96rpx;
 }
 .cat-row {
   display: flex;
