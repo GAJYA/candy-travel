@@ -1,76 +1,134 @@
 /**
- * 这里是uni-app内置的常用样式变量
+ * Candy 设计系统 — uni-app 全局变量
+ * 来源：docs/design.md（Candy / Joyful Pop 视觉语言）
  *
- * uni-app 官方扩展插件及插件市场（https://ext.dcloud.net.cn）上很多三方插件均使用了这些样式变量
- * 如果你是插件开发者，建议你使用scss预处理，并在插件代码中直接使用这些变量（无需 import 这个文件），方便用户通过搭积木的方式开发整体风格一致的App
- *
+ * Note: uni.scss 必须用 SCSS $-变量；CSS 变量在小程序里支持但不用作主题源。
  */
 
-/**
- * 如果你是App开发者（插件使用者），你可以通过修改这些变量来定制自己的插件主题，实现自定义主题功能
- *
- * 如果你的项目同样使用了scss预处理，你也可以直接在你的 scss 代码中使用如下变量，同时无需 import 这个文件
- */
+/* ==================== 颜色 ==================== */
 
-/* 颜色变量 */
+/* 表面色 */
+$candy-surface:                       #fff7fb;
+$candy-surface-dim:                   #f2d9f6;
+$candy-surface-bright:                #fff7fb;
+$candy-surface-container-lowest:      #ffffff;
+$candy-surface-container-low:         #ffefff;
+$candy-surface-container:             #fde7ff;
+$candy-surface-container-high:        #fae0ff;
+$candy-surface-container-highest:     #f8d8ff;
+$candy-on-surface:                    #24102b;
+$candy-on-surface-variant:            #604868;
+$candy-inverse-surface:               #35213d;
+$candy-inverse-on-surface:            #feebff;
 
-/* 行为相关颜色 */
-$uni-color-primary: #007aff;
-$uni-color-success: #4cd964;
-$uni-color-warning: #f0ad4e;
-$uni-color-error: #dd524d;
+/* 描边 */
+$candy-outline:                       #9d8498;
+$candy-outline-variant:               #ecd2e6;
+$candy-surface-tint:                  #e040a0;
 
-/* 文字基本颜色 */
-$uni-text-color: #333; // 基本色
-$uni-text-color-inverse: #fff; // 反色
-$uni-text-color-grey: #999; // 辅助灰色，如加载更多的提示信息
-$uni-text-color-placeholder: #808080;
-$uni-text-color-disable: #c0c0c0;
+/* 主色 — 粉 */
+$candy-primary:                       #e040a0;
+$candy-on-primary:                    #ffffff;
+$candy-primary-container:             #f35bb4;
+$candy-on-primary-container:          #fffbff;
+$candy-inverse-primary:               #ffb8df;
+$candy-primary-fixed:                 #ffd9ef;
+$candy-primary-fixed-dim:             #ffb3dc;
+$candy-on-primary-fixed:              #3d0027;
+$candy-on-primary-fixed-variant:      #9b006b;
 
-/* 背景颜色 */
-$uni-bg-color: #fff;
-$uni-bg-color-grey: #f8f8f8;
-$uni-bg-color-hover: #f1f1f1; // 点击状态颜色
-$uni-bg-color-mask: rgba(0, 0, 0, 0.4); // 遮罩颜色
+/* 二级色 — 紫 */
+$candy-secondary:                     #7c52aa;
+$candy-on-secondary:                  #ffffff;
+$candy-secondary-container:           #d7b3ff;
+$candy-on-secondary-container:        #5a3086;
+$candy-secondary-fixed:               #efdbff;
+$candy-secondary-fixed-dim:           #dbb8ff;
+$candy-on-secondary-fixed:            #2b0052;
+$candy-on-secondary-fixed-variant:    #5b3188;
 
-/* 边框颜色 */
-$uni-border-color: #c8c7cc;
+/* 三级色 — 蓝 */
+$candy-tertiary:                      #0096cc;
+$candy-on-tertiary:                   #ffffff;
+$candy-tertiary-container:            #19addf;
+$candy-on-tertiary-container:         #fcfcff;
+$candy-tertiary-fixed:                #c8f0ff;
+$candy-tertiary-fixed-dim:            #7ed0ff;
+$candy-on-tertiary-fixed:             #001e2d;
+$candy-on-tertiary-fixed-variant:     #004c6a;
 
-/* 尺寸变量 */
+/* 错误 */
+$candy-error:                         #ba1a1a;
+$candy-on-error:                      #ffffff;
+$candy-error-container:               #ffdad6;
+$candy-on-error-container:            #93000a;
 
-/* 文字尺寸 */
-$uni-font-size-sm: 12px;
-$uni-font-size-base: 14px;
-$uni-font-size-lg: 16;
+/* 背景 */
+$candy-background:                    #fff7fb;
+$candy-on-background:                 #24102b;
+$candy-surface-variant:               #f8d8ff;
 
-/* 图片尺寸 */
-$uni-img-size-sm: 20px;
-$uni-img-size-base: 26px;
-$uni-img-size-lg: 40px;
+/* ==================== 圆角 ==================== */
+$candy-radius-sm:                     16rpx;   /* 0.5rem */
+$candy-radius:                        32rpx;   /* 1rem default */
+$candy-radius-md:                     48rpx;   /* 1.5rem */
+$candy-radius-lg:                     64rpx;   /* 2rem */
+$candy-radius-xl:                     96rpx;   /* 3rem */
+$candy-radius-full:                   9999rpx;
 
-/* Border Radius */
-$uni-border-radius-sm: 2px;
-$uni-border-radius-base: 3px;
-$uni-border-radius-lg: 6px;
+/* ==================== 间距 ==================== */
+$candy-space-xs:                      8rpx;    /* 4px */
+$candy-space-sm:                      24rpx;   /* 12px */
+$candy-space-base:                    16rpx;   /* 8px */
+$candy-space-md:                      48rpx;   /* 24px */
+$candy-space-lg:                      80rpx;   /* 40px */
+$candy-gutter:                        32rpx;   /* 16px */
+
+/* ==================== 字号 ==================== */
+$candy-font-headline-lg:              64rpx;   /* 32px */
+$candy-font-headline-md:              48rpx;   /* 24px */
+$candy-font-body-lg:                  32rpx;   /* 16px */
+$candy-font-body-md:                  28rpx;   /* 14px */
+$candy-font-label-md:                 24rpx;   /* 12px */
+
+/* ==================== 阴影 ==================== */
+$candy-shadow-primary:                0 14rpx 40rpx rgba(224, 64, 160, 0.24);
+$candy-shadow-secondary:              0 12rpx 32rpx rgba(124, 82, 170, 0.18);
+$candy-shadow-card:                   0 10rpx 34rpx rgba(96, 72, 104, 0.1);
+
+/* ==================== 兼容 uni-app 默认变量 ==================== */
+/* 框架内部用 $uni-color-primary 等变量，做下覆盖避免插件渲染异常 */
+$uni-color-primary:    $candy-primary;
+$uni-color-success:    #4cd964;
+$uni-color-warning:    #f0ad4e;
+$uni-color-error:      $candy-error;
+
+$uni-text-color:               $candy-on-surface;
+$uni-text-color-inverse:       $candy-on-primary;
+$uni-text-color-grey:          $candy-on-surface-variant;
+$uni-text-color-placeholder:   #b59cb0;
+$uni-text-color-disable:       #ddbfca;
+
+$uni-bg-color:        $candy-background;
+$uni-bg-color-grey:   $candy-surface-container;
+$uni-bg-color-hover:  $candy-surface-container-high;
+$uni-bg-color-mask:   rgba(40, 19, 48, 0.4);
+
+$uni-border-color:    $candy-outline-variant;
+
+$uni-font-size-sm:    $candy-font-label-md;
+$uni-font-size-base:  $candy-font-body-md;
+$uni-font-size-lg:    $candy-font-body-lg;
+
+$uni-border-radius-sm:     $candy-radius-sm;
+$uni-border-radius-base:   $candy-radius;
+$uni-border-radius-lg:     $candy-radius-md;
 $uni-border-radius-circle: 50%;
 
-/* 水平间距 */
-$uni-spacing-row-sm: 5px;
-$uni-spacing-row-base: 10px;
-$uni-spacing-row-lg: 15px;
+$uni-spacing-row-sm:    $candy-space-xs;
+$uni-spacing-row-base:  $candy-space-sm;
+$uni-spacing-row-lg:    $candy-space-md;
 
-/* 垂直间距 */
-$uni-spacing-col-sm: 4px;
-$uni-spacing-col-base: 8px;
-$uni-spacing-col-lg: 12px;
-
-/* 透明度 */
-$uni-opacity-disabled: 0.3; // 组件禁用态的透明度
-
-/* 文章场景相关 */
-$uni-color-title: #2c405a; // 文章标题颜色
-$uni-font-size-title: 20px;
-$uni-color-subtitle: #555; // 二级标题颜色
-$uni-font-size-subtitle: 18px;
-$uni-color-paragraph: #3f536e; // 文章段落颜色
-$uni-font-size-paragraph: 15px;
+$uni-spacing-col-sm:    $candy-space-xs;
+$uni-spacing-col-base:  $candy-space-sm;
+$uni-spacing-col-lg:    $candy-space-md;

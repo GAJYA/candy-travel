@@ -1,11 +1,11 @@
 from datetime import date, datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-class TripStatus(str, Enum):
+class TripStatus(StrEnum):
     draft = "draft"
     planning = "planning"
     confirmed = "confirmed"
@@ -13,7 +13,7 @@ class TripStatus(str, Enum):
     archived = "archived"
 
 
-class TripCreatedVia(str, Enum):
+class TripCreatedVia(StrEnum):
     manual = "manual"
     ai_import = "ai_import"
 

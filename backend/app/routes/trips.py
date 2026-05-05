@@ -7,6 +7,12 @@ from sqlalchemy import select
 from app.deps import CurrentUser, SessionDep
 from app.models import Trip
 from app.schemas.trip import TripCreate, TripOut, TripPatch
+from app.schemas.trip_summary import (
+    TripDetailOut,
+    TripSummaryPatchIn,
+)
+from app.services.checklist_seed import copy_default_templates_to_trip
+from app.services.trip_summary import apply_summary_patch, derive_summary
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -35,6 +41,8 @@ async def create_trip(
         timezone=payload.timezone,
     )
     session.add(trip)
+    await session.flush()  # 需要 trip.id 来拷模板
+    await copy_default_templates_to_trip(session, user_id=user.id, trip_id=trip.id)
     await session.commit()
     await session.refresh(trip)
     return TripOut.model_validate(trip)
@@ -51,12 +59,49 @@ async def list_trips(user: CurrentUser, session: SessionDep) -> list[TripOut]:
     return [TripOut.model_validate(t) for t in result.all()]
 
 
-@router.get("/{trip_id}", response_model=TripOut, response_model_by_alias=True)
-async def get_trip(trip_id: UUID, user: CurrentUser, session: SessionDep) -> TripOut:
+@router.get(
+    "/{trip_id}",
+    response_model=TripDetailOut,
+    response_model_by_alias=True,
+)
+async def get_trip(
+    trip_id: UUID, user: CurrentUser, session: SessionDep
+) -> TripDetailOut:
     trip = await session.scalar(_select_user_trip(user.id, trip_id))
     if trip is None:
         raise HTTPException(status_code=404, detail="trip not found")
-    return TripOut.model_validate(trip)
+    summary = await derive_summary(session, trip.id)
+    base = TripOut.model_validate(trip).model_dump()
+    return TripDetailOut(**base, summary=summary)
+
+
+@router.patch(
+    "/{trip_id}/summary",
+    response_model=TripDetailOut,
+    response_model_by_alias=True,
+)
+async def patch_trip_summary(
+    trip_id: UUID,
+    payload: TripSummaryPatchIn,
+    user: CurrentUser,
+    session: SessionDep,
+) -> TripDetailOut:
+    trip = await session.scalar(_select_user_trip(user.id, trip_id))
+    if trip is None:
+        raise HTTPException(status_code=404, detail="trip not found")
+    try:
+        await apply_summary_patch(
+            session, trip=trip, payload=payload, user_id=user.id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    trip.updated_at = datetime.now(UTC)
+    await session.commit()
+    await session.refresh(trip)
+    summary = await derive_summary(session, trip.id)
+    base = TripOut.model_validate(trip).model_dump()
+    return TripDetailOut(**base, summary=summary)
 
 
 @router.patch("/{trip_id}", response_model=TripOut, response_model_by_alias=True)

@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = 'http://localhost:8000/api/v1'
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
 
 const trimTrailingSlash = (s: string) => s.replace(/\/+$/, '')
 
@@ -78,8 +78,8 @@ export const request = <T>(path: string, options: RequestOptions = {}): Promise<
   return new Promise((resolve, reject) => {
     uni.request({
       url,
-      method: options.method ?? 'GET',
-      data: options.data,
+      method: (options.method ?? 'GET') as UniNamespace.RequestOptions['method'],
+      data: options.data as UniNamespace.RequestOptions['data'],
       header: headers,
       success: (res) => {
         const status = res.statusCode ?? 0
