@@ -1,4 +1,5 @@
 <template>
+  <view class="bottom-nav__safe-zone" />
   <view class="bottom-nav">
     <view
       v-for="item in items"
@@ -36,7 +37,7 @@ const props = defineProps<{
 
 const items: NavItem[] = [
   { key: 'home', icon: 'home', label: '首页', url: '/pages/index/index' },
-  { key: 'calendar', icon: 'calendar', label: '日历', disabled: true },
+  { key: 'calendar', icon: 'calendar', label: '日历', url: '/pages/calendar/index' },
   { key: 'ai', icon: 'ai', label: 'AI助手', disabled: true },
   { key: 'profile', icon: 'user', label: '我的', disabled: true },
 ]
@@ -52,6 +53,17 @@ const onTap = async (item: NavItem) => {
 </script>
 
 <style lang="scss">
+.bottom-nav__safe-zone {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 19;
+  height: calc(220rpx + env(safe-area-inset-bottom));
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 247, 251, 0), $candy-background 42rpx, $candy-background 100%);
+}
+
 .bottom-nav {
   position: fixed;
   left: $candy-gutter;

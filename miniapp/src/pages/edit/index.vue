@@ -134,19 +134,24 @@
             <view
               v-for="event in group.events"
               :key="event.id"
-              class="event-card"
-              @click="onEditEvent(event)"
+              class="event-timeline-row"
             >
-              <view class="event-icon-badge">
-                <CandyIcon :name="eventIconName(event)" />
+              <view class="event-timeline-time">
+                <text>{{ eventTimeRange(event) }}</text>
               </view>
-              <view class="event-body">
-                <text class="event-title">{{ event.title }}</text>
-                <text class="event-time">{{ eventTimeRange(event) }}</text>
-                <text v-if="event.locationName" class="event-meta">地点：{{ event.locationName }}</text>
-                <text v-if="event.note" class="event-meta">{{ event.note }}</text>
+              <view class="event-timeline-rail">
+                <view class="event-icon-badge">
+                  <CandyIcon :name="eventIconName(event)" />
+                </view>
               </view>
-              <button v-if="canDeleteEvent(event)" class="event-delete" @click.stop="onDeleteEvent(event.id)">×</button>
+              <view class="event-card" @click="onEditEvent(event)">
+                <view class="event-body">
+                  <text class="event-title">{{ event.title }}</text>
+                  <text v-if="event.locationName" class="event-meta">地点：{{ event.locationName }}</text>
+                  <text v-if="event.note" class="event-meta">{{ event.note }}</text>
+                </view>
+                <button v-if="canDeleteEvent(event)" class="event-delete" @click.stop="onDeleteEvent(event.id)">×</button>
+              </view>
             </view>
           </view>
         </view>
@@ -208,6 +213,7 @@
       />
     </view>
 
+    <view class="editor-action-safe-zone" />
     <view class="editor-action-bar">
       <button
         v-if="tripId"
@@ -1030,8 +1036,8 @@ const onAddSubmit = async () => {
 
 <style lang="scss">
 .page {
-  padding: $candy-space-md $candy-gutter 176rpx;
-  padding-bottom: calc(176rpx + env(safe-area-inset-bottom));
+  padding: $candy-space-md $candy-gutter 380rpx;
+  padding-bottom: calc(380rpx + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 34rpx;
@@ -1244,7 +1250,7 @@ const onAddSubmit = async () => {
   display: flex;
   flex-direction: column;
   gap: $candy-space-sm;
-  padding: 20rpx;
+  padding: 24rpx;
   background: rgba(255, 255, 255, 0.82);
 }
 .empty-events {
@@ -1282,7 +1288,7 @@ const onAddSubmit = async () => {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8rpx;
+  padding: 0 8rpx 12rpx;
 }
 .event-day__date {
   font-size: $candy-font-body-md;
@@ -1293,14 +1299,41 @@ const onAddSubmit = async () => {
   font-size: $candy-font-label-md;
   color: $candy-on-surface-variant;
 }
+.event-timeline-row {
+  display: grid;
+  grid-template-columns: 100rpx 66rpx 1fr;
+  min-height: 136rpx;
+}
+.event-timeline-time {
+  padding-top: 26rpx;
+  color: $candy-primary;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1.35;
+}
+.event-timeline-rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.event-timeline-rail::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4rpx;
+  border-radius: 4rpx;
+  background: $candy-outline-variant;
+}
 .event-card {
   position: relative;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   gap: 18rpx;
-  padding: 22rpx 58rpx 22rpx 22rpx;
-  border-radius: 34rpx;
+  margin: 0 0 24rpx 8rpx;
+  padding: 26rpx 60rpx 26rpx 24rpx;
+  border-radius: 36rpx;
   background: $candy-surface-container-lowest;
   box-shadow: 0 8rpx 22rpx rgba(96, 72, 104, 0.07);
 }
@@ -1308,23 +1341,26 @@ const onAddSubmit = async () => {
   background: $candy-surface-container-low;
 }
 .event-icon-badge {
-  flex: 0 0 64rpx;
-  width: 64rpx;
-  height: 64rpx;
+  position: relative;
+  z-index: 1;
+  width: 58rpx;
+  height: 58rpx;
+  margin-top: 18rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: $candy-primary-fixed;
   color: $candy-primary;
-  font-size: 34rpx;
+  font-size: 32rpx;
+  box-shadow: 0 0 0 8rpx #ffffff;
 }
 .event-body {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
+  gap: 8rpx;
 }
 .event-title {
   min-width: 0;
@@ -1334,11 +1370,6 @@ const onAddSubmit = async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.event-time {
-  color: $candy-primary;
-  font-size: $candy-font-label-md;
-  font-weight: 800;
 }
 .event-meta {
   color: $candy-on-surface-variant;
@@ -1466,6 +1497,16 @@ const onAddSubmit = async () => {
   border-radius: $candy-radius-lg;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 18rpx 44rpx rgba(96, 72, 104, 0.16);
+}
+.editor-action-safe-zone {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  height: calc(218rpx + env(safe-area-inset-bottom));
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 247, 251, 0), $candy-background 34rpx, $candy-background 100%);
 }
 .editor-action-bar__save,
 .editor-action-bar__delete {

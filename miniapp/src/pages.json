@@ -9,6 +9,14 @@
 			}
 		},
 		{
+			"path": "pages/calendar/index",
+			"style": {
+				"navigationBarTitleText": "日历",
+				"navigationBarBackgroundColor": "#fff7fb",
+				"backgroundColor": "#fff7fb"
+			}
+		},
+		{
 			"path": "pages/edit/index",
 			"style": {
 				"navigationBarTitleText": "编辑行程",
