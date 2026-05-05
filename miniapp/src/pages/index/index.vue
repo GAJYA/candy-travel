@@ -60,39 +60,6 @@
         <text class="new-btn__arrow">›</text>
       </button>
 
-      <view class="stats-grid">
-        <view class="stat-card stat-card--pink">
-          <text class="stat-value">{{ trip.list.length }}</text>
-          <text class="stat-label">计划旅程</text>
-        </view>
-        <view class="stat-card stat-card--disabled">
-          <text class="stat-value">--</text>
-          <text class="stat-label">计划城市</text>
-          <text class="stat-note">待统计</text>
-        </view>
-        <view class="stat-card stat-card--disabled">
-          <text class="stat-value">--</text>
-          <text class="stat-label">预计 km</text>
-          <text class="stat-note">待统计</text>
-        </view>
-      </view>
-
-      <view class="candy-card footprint-card footprint-card--disabled">
-        <view class="section-head">
-          <text class="section-icon">🗺️</text>
-          <text class="section-title">我的足迹</text>
-        </view>
-        <view class="map-plate">
-          <text class="map-watermark">WORLD</text>
-          <view class="route-dot route-dot--from" />
-          <view class="route-line" />
-          <view class="route-dot route-dot--to" />
-          <view class="map-mask">
-            <text class="map-mask__label">足迹地图待生成</text>
-          </view>
-        </view>
-      </view>
-
       <view class="section-head">
         <text class="section-icon">✈️</text>
         <text class="section-title">即将出发</text>
@@ -122,6 +89,21 @@
             <text class="trip-card__title">{{ t.title }}</text>
             <text class="trip-card__dates">{{ formatDateRange(t.startDate, t.endDate) }}</text>
           </view>
+        </view>
+      </view>
+
+      <view class="future-strip">
+        <view class="future-strip__item">
+          <text class="future-strip__label">计划城市</text>
+          <text class="future-strip__value">待统计</text>
+        </view>
+        <view class="future-strip__item">
+          <text class="future-strip__label">预计里程</text>
+          <text class="future-strip__value">待统计</text>
+        </view>
+        <view class="future-strip__item">
+          <text class="future-strip__label">我的足迹</text>
+          <text class="future-strip__value">待生成</text>
         </view>
       </view>
     </view>
@@ -407,56 +389,6 @@ onUnmounted(() => {
   line-height: 1;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: $candy-space-sm;
-}
-.stat-card {
-  min-height: 132rpx;
-  border-radius: $candy-radius-md;
-  padding: 24rpx 18rpx;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  box-shadow: $candy-shadow-card;
-}
-.stat-card--pink {
-  background: $candy-primary-fixed;
-  color: $candy-on-primary-fixed-variant;
-}
-.stat-card--blue {
-  background: $candy-tertiary;
-  color: $candy-on-tertiary;
-}
-.stat-card--purple {
-  background: $candy-secondary-fixed;
-  color: $candy-on-secondary-fixed-variant;
-}
-.stat-card--disabled {
-  position: relative;
-  border: 2rpx dashed $candy-outline-variant;
-  background: rgba(255, 255, 255, 0.58);
-  color: rgba(96, 72, 104, 0.58);
-  box-shadow: none;
-}
-.stat-value {
-  font-size: 38rpx;
-  font-weight: 900;
-  line-height: 1.1;
-}
-.stat-label {
-  margin-top: 8rpx;
-  font-size: $candy-font-label-md;
-  font-weight: 700;
-}
-.stat-note {
-  margin-top: 6rpx;
-  font-size: 20rpx;
-  font-weight: 600;
-  color: rgba(96, 72, 104, 0.48);
-}
-
 .section-head {
   display: flex;
   flex-direction: row;
@@ -470,86 +402,6 @@ onUnmounted(() => {
   font-size: $candy-font-body-lg;
   font-weight: 800;
   color: $candy-on-surface;
-}
-
-.footprint-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: $candy-space-sm;
-  padding: $candy-space-sm;
-}
-.footprint-card--disabled {
-  border-style: dashed;
-  box-shadow: none;
-}
-.footprint-card--disabled .section-icon,
-.footprint-card--disabled .section-title {
-  opacity: 0.56;
-}
-.map-plate {
-  position: relative;
-  height: 168rpx;
-  border-radius: $candy-radius-md;
-  overflow: hidden;
-  background: linear-gradient(135deg, #dff8ff 0%, #ffffff 54%, #ffe3f3 100%);
-}
-.footprint-card--disabled .map-watermark,
-.footprint-card--disabled .route-dot,
-.footprint-card--disabled .route-line {
-  opacity: 0.24;
-}
-.map-mask {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.62);
-  backdrop-filter: blur(2rpx);
-}
-.map-mask__label {
-  padding: 10rpx 22rpx;
-  border-radius: $candy-radius-full;
-  border: 2rpx solid rgba(157, 132, 152, 0.36);
-  background: rgba(255, 255, 255, 0.72);
-  color: rgba(96, 72, 104, 0.72);
-  font-size: $candy-font-label-md;
-  font-weight: 700;
-}
-.map-watermark {
-  position: absolute;
-  left: 26rpx;
-  top: 54rpx;
-  font-size: 58rpx;
-  font-weight: 900;
-  color: rgba(96, 72, 104, 0.1);
-}
-.route-dot {
-  position: absolute;
-  width: 22rpx;
-  height: 22rpx;
-  border-radius: 50%;
-  background: $candy-primary;
-  box-shadow: 0 0 0 12rpx rgba(224, 64, 160, 0.14);
-}
-.route-dot--from {
-  left: 94rpx;
-  top: 104rpx;
-}
-.route-dot--to {
-  right: 96rpx;
-  top: 48rpx;
-}
-.route-line {
-  position: absolute;
-  left: 120rpx;
-  right: 122rpx;
-  top: 88rpx;
-  height: 4rpx;
-  border-radius: $candy-radius-full;
-  background: $candy-primary;
-  transform: rotate(-12deg);
 }
 
 .trip-list {
@@ -597,6 +449,34 @@ onUnmounted(() => {
 .trip-card__dates {
   color: $candy-on-surface-variant;
   font-size: $candy-font-body-md;
+}
+
+.future-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  padding: 14rpx;
+  border: 2rpx dashed rgba(157, 132, 152, 0.26);
+  border-radius: $candy-radius-md;
+  background: rgba(255, 255, 255, 0.48);
+}
+.future-strip__item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 10rpx 8rpx;
+  text-align: center;
+}
+.future-strip__label {
+  color: rgba(96, 72, 104, 0.62);
+  font-size: 22rpx;
+  font-weight: 700;
+}
+.future-strip__value {
+  color: rgba(96, 72, 104, 0.46);
+  font-size: 20rpx;
+  font-weight: 700;
 }
 
 .login-card,

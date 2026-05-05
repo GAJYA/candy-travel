@@ -10,22 +10,20 @@
       }"
       @click="onTap(item)"
     >
-      <view class="bottom-nav__icon" :class="`bottom-nav__icon--${item.key}`">
-        <view class="icon-line icon-line--a" />
-        <view class="icon-line icon-line--b" />
-        <view class="icon-line icon-line--c" />
-        <view class="icon-line icon-line--d" />
-      </view>
+      <CandyIcon class="bottom-nav__icon" :name="item.icon" />
       <text class="bottom-nav__label">{{ item.label }}</text>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
+import CandyIcon from './CandyIcon.vue'
+
 type NavKey = 'home' | 'calendar' | 'ai' | 'profile' | 'trip'
 
 interface NavItem {
   key: NavKey
+  icon: string
   label: string
   url?: string
   disabled?: boolean
@@ -37,10 +35,10 @@ const props = defineProps<{
 }>()
 
 const items: NavItem[] = [
-  { key: 'home', label: '首页', url: '/pages/index/index' },
-  { key: 'calendar', label: '日历', disabled: true },
-  { key: 'ai', label: 'AI助手', disabled: true },
-  { key: 'profile', label: '我的', disabled: true },
+  { key: 'home', icon: 'home', label: '首页', url: '/pages/index/index' },
+  { key: 'calendar', icon: 'calendar', label: '日历', disabled: true },
+  { key: 'ai', icon: 'ai', label: 'AI助手', disabled: true },
+  { key: 'profile', icon: 'user', label: '我的', disabled: true },
 ]
 
 const onTap = async (item: NavItem) => {
@@ -94,129 +92,10 @@ const onTap = async (item: NavItem) => {
 }
 
 .bottom-nav__icon {
-  position: relative;
-  width: 40rpx;
-  height: 40rpx;
+  width: 38rpx;
+  height: 38rpx;
+  font-size: 38rpx;
   color: currentColor;
-}
-
-.icon-line {
-  position: absolute;
-  box-sizing: border-box;
-  border-color: currentColor;
-}
-
-.bottom-nav__icon--home .icon-line--a {
-  left: 6rpx;
-  top: 16rpx;
-  width: 28rpx;
-  height: 20rpx;
-  border-left: 5rpx solid currentColor;
-  border-right: 5rpx solid currentColor;
-  border-bottom: 5rpx solid currentColor;
-  border-radius: 0 0 5rpx 5rpx;
-}
-
-.bottom-nav__icon--home .icon-line--b {
-  left: 8rpx;
-  top: 5rpx;
-  width: 24rpx;
-  height: 24rpx;
-  border-left: 5rpx solid currentColor;
-  border-top: 5rpx solid currentColor;
-  border-radius: 4rpx;
-  transform: rotate(45deg);
-}
-
-.bottom-nav__icon--calendar .icon-line--a {
-  left: 6rpx;
-  top: 8rpx;
-  width: 28rpx;
-  height: 28rpx;
-  border: 4rpx solid currentColor;
-  border-radius: 7rpx;
-}
-
-.bottom-nav__icon--calendar .icon-line--b {
-  left: 10rpx;
-  right: 10rpx;
-  top: 17rpx;
-  height: 4rpx;
-  border-radius: $candy-radius-full;
-  background: currentColor;
-}
-
-.bottom-nav__icon--calendar .icon-line--c,
-.bottom-nav__icon--calendar .icon-line--d {
-  top: 4rpx;
-  width: 4rpx;
-  height: 10rpx;
-  border-radius: $candy-radius-full;
-  background: currentColor;
-}
-
-.bottom-nav__icon--calendar .icon-line--c {
-  left: 14rpx;
-}
-
-.bottom-nav__icon--calendar .icon-line--d {
-  right: 14rpx;
-}
-
-.bottom-nav__icon--ai .icon-line--a {
-  left: 15rpx;
-  top: 3rpx;
-  width: 10rpx;
-  height: 34rpx;
-  border-radius: $candy-radius-full;
-  background: currentColor;
-}
-
-.bottom-nav__icon--ai .icon-line--b {
-  left: 3rpx;
-  top: 15rpx;
-  width: 34rpx;
-  height: 10rpx;
-  border-radius: $candy-radius-full;
-  background: currentColor;
-}
-
-.bottom-nav__icon--ai .icon-line--c {
-  right: 1rpx;
-  top: 1rpx;
-  width: 8rpx;
-  height: 8rpx;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.72;
-}
-
-.bottom-nav__icon--ai .icon-line--d {
-  left: 1rpx;
-  bottom: 3rpx;
-  width: 6rpx;
-  height: 6rpx;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.54;
-}
-
-.bottom-nav__icon--profile .icon-line--a {
-  left: 14rpx;
-  top: 5rpx;
-  width: 12rpx;
-  height: 12rpx;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.bottom-nav__icon--profile .icon-line--b {
-  left: 8rpx;
-  bottom: 5rpx;
-  width: 24rpx;
-  height: 16rpx;
-  border-radius: 16rpx 16rpx 6rpx 6rpx;
-  background: currentColor;
 }
 
 .bottom-nav__label {
