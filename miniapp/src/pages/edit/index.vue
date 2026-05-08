@@ -524,7 +524,7 @@ onLoad((opts?: Record<string, string | undefined>) => {
     tripId.value = opts.id
     void load()
   } else {
-    initNewTrip()
+    initNewTrip(opts)
   }
 })
 
@@ -566,15 +566,15 @@ const loadEvents = async () => {
   }
 }
 
-const initNewTrip = () => {
+const initNewTrip = (opts?: Record<string, string | undefined>) => {
   tripId.value = ''
   trip.value = null
   checklistItems.value = []
   tripEvents.value = []
   form.title = '新的旅行'
   form.transportMode = 'flight'
-  form.departDate = ''
-  form.endDate = ''
+  form.departDate = normalizeDateParam(opts?.startDate)
+  form.endDate = normalizeDateParam(opts?.endDate) || form.departDate
   form.departTime = ''
   form.note = ''
   markPristine()
@@ -618,6 +618,19 @@ const hasUnsavedChanges = () => pristineSnapshot.value !== formSnapshot()
 
 const formatDate = (d: Date) => d.toISOString().slice(0, 10)
 const formatTime = (d: Date) => d.toTimeString().slice(0, 5)
+const normalizeDateParam = (date?: string) => {
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return ''
+  const [year, month, day] = date.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  if (
+    parsed.getFullYear() !== year
+    || parsed.getMonth() !== month - 1
+    || parsed.getDate() !== day
+  ) {
+    return ''
+  }
+  return date
+}
 const formatShortDate = (date: string) => {
   const [, month, day] = date.split('-')
   return `${Number(month)}/${Number(day)}`

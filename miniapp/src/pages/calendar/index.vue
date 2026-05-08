@@ -67,6 +67,13 @@
           >
             编辑行程
           </button>
+          <button
+            v-else-if="canCreateTripForSelectedDate"
+            class="day-panel__action"
+            @click="createTripForSelectedDate"
+          >
+            新建行程
+          </button>
         </view>
 
         <view v-if="canShowTripOverview" class="timeline-switch">
@@ -109,7 +116,7 @@
         </view>
         <view v-else-if="visibleTimelineMode === 'day' && selectedItems.length === 0" class="empty-day">
           <text class="empty-day__title">这天还没有安排</text>
-          <text class="empty-day__hint">在编辑行程里添加事件后会出现在这里</text>
+          <text class="empty-day__hint">可以从这一天开始创建一段旅行</text>
         </view>
         <view v-else-if="visibleTimelineMode === 'day'" class="schedule-list">
           <view
@@ -359,6 +366,10 @@ const visibleTimelineMode = computed<TimelineMode>(() => (
   canShowTripOverview.value ? timelineMode.value : 'day'
 ))
 
+const canCreateTripForSelectedDate = computed(() => (
+  visibleTimelineMode.value === 'day' && selectedItems.value.length === 0
+))
+
 const selectedOverviewTripId = computed(() => {
   if (selectedTrips.value.some((item) => item.id === overviewTripId.value)) return overviewTripId.value
   return selectedTrips.value[0]?.id || ''
@@ -476,6 +487,16 @@ const goToday = () => {
 const openTrip = (tripId: string) => {
   if (!tripId) return
   uni.navigateTo({ url: `/pages/edit/index?id=${tripId}` })
+}
+
+const createTripForSelectedDate = () => {
+  const date = encodeURIComponent(selectedDate.value)
+  uni.navigateTo({
+    url: `/pages/edit/index?mode=create&startDate=${date}&endDate=${date}`,
+    fail: (err) => {
+      uni.showToast({ title: err.errMsg || '打开编辑页失败', icon: 'none' })
+    },
+  })
 }
 
 const eventIconName = (event: TripEvent) => {
