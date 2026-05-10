@@ -18,6 +18,54 @@
       </view>
     </view>
 
+    <view class="status-strip">
+      <view
+        v-for="option in statusOptions"
+        :key="option.value"
+        class="status-chip"
+        :class="{ 'status-chip--active': form.status === option.value }"
+        @click="form.status = option.value"
+      >
+        <text>{{ option.label }}</text>
+      </view>
+    </view>
+
+    <!-- 同行成员 -->
+    <view v-if="tripId" class="section">
+      <view class="section-head section-head--split">
+        <view class="section-title-row">
+          <view class="section-icon">
+            <CandyIcon name="user" />
+          </view>
+          <text class="section-title">{{ otherMembers.length > 0 ? '同行成员' : '邀请同行' }}</text>
+        </view>
+        <button class="mini-action mini-action--secondary" @click="onShowInviteFriend">
+          邀请好友
+        </button>
+      </view>
+      <view v-if="memberLoading || otherMembers.length > 0" class="candy-card member-panel">
+        <view v-if="memberLoading" class="empty-members">
+          <text class="candy-text-muted">加载成员...</text>
+        </view>
+        <view v-else class="member-list">
+          <view
+            v-for="(member, index) in otherMembers"
+            :key="member.id"
+            class="member-row"
+          >
+            <view class="member-avatar">
+              <text>{{ memberAvatarText(member, index) }}</text>
+            </view>
+            <view class="member-copy">
+              <text class="member-name">{{ memberName(member, index) }}</text>
+              <text class="member-meta">{{ memberMeta(member) }}</text>
+            </view>
+            <text class="member-role">{{ member.role === 'owner' ? '创建者' : '可编辑' }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <!-- 如何抵达？ -->
     <view class="section transport-section">
       <view class="section-head">
@@ -232,6 +280,39 @@
       </button>
     </view>
 
+    <!-- 同行邀请码弹层 -->
+    <view v-if="inviteOpen" class="modal-mask" @click="inviteOpen = false">
+      <view class="modal" @click.stop>
+        <text class="modal-title">同行邀请码</text>
+        <view class="invite-card">
+          <view class="invite-card__icon">
+            <CandyIcon name="user" />
+          </view>
+          <view class="invite-card__copy">
+            <text class="invite-card__title">{{ form.title || '这次旅行' }}</text>
+            <text class="invite-card__hint">把邀请码发给好友，对方在小程序首页粘贴后即可加入同行</text>
+          </view>
+        </view>
+        <view v-if="inviteCreating" class="invite-loading">
+          <text>正在生成邀请码...</text>
+        </view>
+        <view v-else-if="shareInvite" class="invite-ready">
+          <text class="invite-code">{{ shareInvite.code }}</text>
+          <text class="invite-expire">邀请有效期至 {{ formatInviteExpire(shareInvite.expiresAt) }}</text>
+        </view>
+        <view class="modal-actions">
+          <button class="candy-btn candy-btn--ghost" @click="inviteOpen = false">取消</button>
+          <button
+            class="candy-btn candy-btn--primary"
+            :disabled="!shareInvite || inviteCreating"
+            @click="copyInviteCode"
+          >
+            复制邀请码
+          </button>
+        </view>
+      </view>
+    </view>
+
     <!-- 添加事件弹层 -->
     <view v-if="eventAddOpen" class="modal-mask" @click="eventAddOpen = false">
       <view class="modal modal--event" @click.stop>
@@ -370,7 +451,7 @@ import { computed, reactive, ref } from 'vue'
 import { onBackPress, onLoad, onShow } from '@dcloudio/uni-app'
 
 import CandyIcon from '../../components/CandyIcon.vue'
-import type { TransportMode, TripDetail } from '../../services/trip'
+import type { TransportMode, TripDetail, TripInvite, TripMember, TripStatus } from '../../services/trip'
 import { tripApi } from '../../services/trip'
 import {
   CATEGORY_LABELS as catLabels,
@@ -382,14 +463,22 @@ import {
   tripEventApi,
   type TripEvent,
 } from '../../services/trip-event'
+import { useAuthStore } from '../../stores/auth'
 
+const auth = useAuthStore()
 const tripId = ref<string>('')
 const trip = ref<TripDetail | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const tripEvents = ref<TripEvent[]>([])
+const members = ref<TripMember[]>([])
+const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
 const saving = ref(false)
 const deleting = ref(false)
+const memberLoading = ref(false)
+const inviteOpen = ref(false)
+const inviteCreating = ref(false)
+const shareInvite = ref<TripInvite | null>(null)
 const addOpen = ref(false)
 const addLabel = ref('')
 const addCategory = ref<ChecklistCategory>('other')
@@ -412,6 +501,7 @@ interface EventFormState {
 
 interface FormState {
   title: string
+  status: EditableTripStatus
   transportMode: TransportMode
   departDate: string
   endDate: string
@@ -419,8 +509,11 @@ interface FormState {
   note: string
 }
 
+type EditableTripStatus = Extract<TripStatus, 'planning' | 'confirmed' | 'completed' | 'canceled'>
+
 const form = reactive<FormState>({
   title: '',
+  status: 'planning',
   transportMode: 'flight',
   departDate: '',
   endDate: '',
@@ -507,6 +600,13 @@ const modes: Array<{ value: TransportMode; icon: string; label: string }> = [
   { value: 'car', icon: 'car', label: '自驾' },
 ]
 
+const statusOptions: Array<{ value: EditableTripStatus; label: string }> = [
+  { value: 'planning', label: '规划中' },
+  { value: 'confirmed', label: '已确认' },
+  { value: 'completed', label: '已完成' },
+  { value: 'canceled', label: '已取消' },
+]
+
 const transportLabel = computed(() => {
   const current = modes.find((mode) => mode.value === form.transportMode)
   return current ? current.label : '未选择交通'
@@ -546,6 +646,7 @@ const load = async () => {
   try {
     trip.value = await tripApi.get(tripId.value)
     syncFormFromTrip(trip.value)
+    await loadMembers()
     checklistItems.value = await checklistApi.list(tripId.value)
     await loadEvents()
     markPristine()
@@ -566,12 +667,28 @@ const loadEvents = async () => {
   }
 }
 
+const loadMembers = async () => {
+  if (!tripId.value) return
+  memberLoading.value = true
+  try {
+    members.value = await tripApi.listMembers(tripId.value)
+  } catch {
+    members.value = []
+    uni.showToast({ title: '成员加载失败', icon: 'none' })
+  } finally {
+    memberLoading.value = false
+  }
+}
+
 const initNewTrip = (opts?: Record<string, string | undefined>) => {
   tripId.value = ''
   trip.value = null
   checklistItems.value = []
   tripEvents.value = []
+  members.value = []
+  shareInvite.value = null
   form.title = '新的旅行'
+  form.status = 'planning'
   form.transportMode = 'flight'
   form.departDate = normalizeDateParam(opts?.startDate)
   form.endDate = normalizeDateParam(opts?.endDate) || form.departDate
@@ -582,6 +699,7 @@ const initNewTrip = (opts?: Record<string, string | undefined>) => {
 
 const syncFormFromTrip = (t: TripDetail) => {
   form.title = t.title
+  form.status = normalizeEditableStatus(t.status)
   form.transportMode = 'flight'
   form.departDate = ''
   form.endDate = ''
@@ -603,6 +721,7 @@ const syncFormFromTrip = (t: TripDetail) => {
 
 const formSnapshot = () => JSON.stringify({
   title: form.title,
+  status: form.status,
   transportMode: form.transportMode,
   departDate: form.departDate,
   endDate: form.endDate,
@@ -615,6 +734,11 @@ const markPristine = () => {
 }
 
 const hasUnsavedChanges = () => pristineSnapshot.value !== formSnapshot()
+
+const normalizeEditableStatus = (status: TripStatus): EditableTripStatus => {
+  if (status === 'confirmed' || status === 'completed' || status === 'canceled') return status
+  return 'planning'
+}
 
 const formatDate = (d: Date) => d.toISOString().slice(0, 10)
 const formatTime = (d: Date) => d.toTimeString().slice(0, 5)
@@ -728,7 +852,7 @@ const saveTrip = async (options: { redirectNew?: boolean } = {}): Promise<boolea
     const payload: any = {
       title: form.title.trim(),
       note: form.note ? form.note.trim() : null,
-      status: 'planning',
+      status: form.status,
     }
 
     if (form.departDate || form.transportMode) {
@@ -746,6 +870,7 @@ const saveTrip = async (options: { redirectNew?: boolean } = {}): Promise<boolea
     if (wasNewTrip) {
       const created = await tripApi.create({
         title: payload.title,
+        status: payload.status,
         note: payload.note,
         startDate: payload.startDate,
         endDate: payload.endDate,
@@ -755,6 +880,7 @@ const saveTrip = async (options: { redirectNew?: boolean } = {}): Promise<boolea
 
     trip.value = await tripApi.patchSummary(tripId.value, payload)
     if (wasNewTrip) {
+      await loadMembers()
       checklistItems.value = await checklistApi.list(tripId.value)
       tripEvents.value = []
     }
@@ -1022,6 +1148,59 @@ const deleteChecklistItem = async (itemId: string) => {
   }
 }
 
+const isCurrentMember = (member: TripMember) => auth.user?.id === member.user.id
+
+const memberName = (member: TripMember, index: number) => {
+  const nickname = member.user.nickname?.trim()
+  if (nickname) return nickname
+  return otherMembers.value.length > 1 ? `同行成员 ${index + 1}` : '同行成员'
+}
+
+const memberMeta = (member: TripMember) => {
+  return member.role === 'owner' ? '行程创建者' : '已加入同行'
+}
+
+const memberAvatarText = (member: TripMember, index: number) => {
+  const name = memberName(member, index).trim()
+  return name ? name.slice(0, 1).toUpperCase() : '旅'
+}
+
+const onShowInviteFriend = async () => {
+  if (!tripId.value) {
+    uni.showToast({ title: '请先保存行程', icon: 'none' })
+    return
+  }
+  inviteOpen.value = true
+  if (!shareInvite.value) await createShareInvite()
+}
+
+const createShareInvite = async () => {
+  if (!tripId.value || inviteCreating.value) return
+  inviteCreating.value = true
+  try {
+    shareInvite.value = await tripApi.createInvite(tripId.value)
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '邀请生成失败', icon: 'none' })
+  } finally {
+    inviteCreating.value = false
+  }
+}
+
+const copyInviteCode = () => {
+  if (!shareInvite.value) return
+  uni.setClipboardData({
+    data: shareInvite.value.code,
+    success: () => {
+      uni.showToast({ title: '邀请码已复制', icon: 'success' })
+    },
+  })
+}
+
+const formatInviteExpire = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 const onShowAdd = () => {
   if (!tripId.value) {
     uni.showToast({ title: '请先保存行程', icon: 'none' })
@@ -1148,6 +1327,31 @@ const onAddSubmit = async () => {
   font-size: $candy-font-label-md;
   font-weight: 700;
 }
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10rpx;
+  padding: 10rpx;
+  border-radius: $candy-radius-full;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: $candy-shadow-card;
+}
+.status-chip {
+  min-width: 0;
+  height: 64rpx;
+  border-radius: $candy-radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.status-chip--active {
+  background: $candy-primary;
+  color: $candy-on-primary;
+  box-shadow: 0 8rpx 22rpx rgba(224, 64, 160, 0.18);
+}
 
 /* 出行方式 */
 .transport-section .section-head {
@@ -1258,6 +1462,78 @@ const onAddSubmit = async () => {
   background: $candy-outline-variant;
   color: $candy-on-surface-variant;
   box-shadow: none;
+}
+.mini-action--secondary {
+  background: $candy-secondary;
+  box-shadow: 0 8rpx 20rpx rgba(0, 150, 204, 0.16);
+}
+.member-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding: 20rpx;
+}
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.empty-members {
+  min-height: 86rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.member-row {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16rpx;
+  padding: 14rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-lowest;
+}
+.member-avatar {
+  flex: 0 0 56rpx;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $candy-primary-fixed;
+  color: $candy-primary;
+  font-size: 24rpx;
+  font-weight: 900;
+}
+.member-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.member-name {
+  color: $candy-on-surface;
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+}
+.member-meta {
+  color: $candy-on-surface-variant;
+  font-size: 18rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-role {
+  flex: 0 0 auto;
+  padding: 4rpx 14rpx;
+  border-radius: $candy-radius-full;
+  background: $candy-secondary-fixed;
+  color: $candy-on-secondary-fixed-variant;
+  font-size: 20rpx;
+  font-weight: 800;
 }
 .event-panel {
   display: flex;
@@ -1593,6 +1869,11 @@ const onAddSubmit = async () => {
   font-weight: 700;
   color: $candy-on-surface;
 }
+.modal-hint {
+  color: $candy-on-surface-variant;
+  font-size: 24rpx;
+  line-height: 1.6;
+}
 .event-name-row {
   display: flex;
   flex-direction: row;
@@ -1662,6 +1943,71 @@ const onAddSubmit = async () => {
   font-size: 20rpx;
   font-weight: 800;
   color: $candy-on-surface-variant;
+}
+.invite-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 18rpx;
+  padding: 20rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-primary-fixed;
+}
+.invite-card__icon {
+  flex: 0 0 68rpx;
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $candy-surface-container-lowest;
+  color: $candy-primary;
+  font-size: 34rpx;
+}
+.invite-card__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.invite-card__title {
+  color: $candy-on-surface;
+  font-size: $candy-font-body-lg;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.invite-card__hint,
+.invite-loading,
+.invite-expire {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+}
+.invite-loading,
+.invite-ready {
+  min-height: 44rpx;
+  display: flex;
+  align-items: center;
+}
+.invite-ready {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8rpx;
+}
+.invite-code {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 18rpx 24rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-low;
+  color: $candy-primary;
+  font-size: 54rpx;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 8rpx;
 }
 .event-form-row {
   display: grid;

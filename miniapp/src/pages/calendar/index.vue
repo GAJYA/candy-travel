@@ -580,7 +580,7 @@ const dateSortValue = (item: Trip) => {
 }
 
 const isUpcomingTrip = (item: Trip) => {
-  if (!item.startDate || ['completed', 'archived'].includes(item.status)) return false
+  if (!item.startDate || ['completed', 'canceled', 'archived'].includes(item.status)) return false
   return parseDate(item.startDate).getTime() >= parseDate(today).getTime()
 }
 

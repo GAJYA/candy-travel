@@ -7,26 +7,24 @@ from sqlalchemy import select
 from app.deps import CurrentUser, SessionDep
 from app.models import Trip, TripEvent
 from app.schemas.trip_event import TripEventCreate, TripEventOut, TripEventPatch
+from app.services.trip_access import accessible_trip_filter, get_accessible_trip
 
 router = APIRouter(tags=["events"])
 
 
 async def _get_user_trip(session, user_id: UUID, trip_id: UUID) -> Trip | None:
-    return await session.scalar(
-        select(Trip).where(
-            Trip.id == trip_id,
-            Trip.user_id == user_id,
-            Trip.deleted_at.is_(None),
-        )
-    )
+    return await get_accessible_trip(session, user_id=user_id, trip_id=trip_id)
 
 
 async def _get_user_event(session, user_id: UUID, event_id: UUID) -> TripEvent | None:
     return await session.scalar(
-        select(TripEvent).where(
+        select(TripEvent)
+        .join(Trip, Trip.id == TripEvent.trip_id)
+        .where(
             TripEvent.id == event_id,
-            TripEvent.user_id == user_id,
             TripEvent.deleted_at.is_(None),
+            Trip.deleted_at.is_(None),
+            accessible_trip_filter(user_id),
         )
     )
 
@@ -126,9 +124,12 @@ async def delete_event(
     event_id: UUID, user: CurrentUser, session: SessionDep
 ) -> Response:
     event = await session.scalar(
-        select(TripEvent).where(
+        select(TripEvent)
+        .join(Trip, Trip.id == TripEvent.trip_id)
+        .where(
             TripEvent.id == event_id,
-            TripEvent.user_id == user.id,
+            Trip.deleted_at.is_(None),
+            accessible_trip_filter(user.id),
         )
     )
     if event is None or event.deleted_at is not None:

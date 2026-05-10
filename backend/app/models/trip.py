@@ -7,7 +7,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin
 
-TRIP_STATUSES = ("draft", "planning", "confirmed", "completed", "archived")
+TRIP_STATUSES = (
+    "draft",
+    "planning",
+    "confirmed",
+    "completed",
+    "canceled",
+    "archived",
+)
 TRIP_CREATED_VIA = ("manual", "ai_import")
 
 
@@ -42,7 +49,7 @@ class Trip(Base, TimestampMixin, SoftDeleteMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('draft','planning','confirmed','completed','archived')",
+            "status IN ('draft','planning','confirmed','completed','canceled','archived')",
             name="status",
         ),
         CheckConstraint(

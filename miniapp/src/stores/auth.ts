@@ -53,11 +53,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  const updateProfile = async (
+    payload: Partial<Pick<UserInfo, 'nickname' | 'avatarUrl' | 'locale' | 'timezone'>>
+  ) => {
+    const nextUser = await authApi.patchMe(payload)
+    user.value = nextUser
+    return nextUser
+  }
+
   const logout = () => {
     clear()
   }
 
-  return { user, loading, error, isAuthenticated, bootstrap, login, logout }
+  return { user, loading, error, isAuthenticated, bootstrap, login, updateProfile, logout }
 })
 
 const formatError = (e: unknown): string => {

@@ -10,6 +10,7 @@ class TripStatus(StrEnum):
     planning = "planning"
     confirmed = "confirmed"
     completed = "completed"
+    canceled = "canceled"
     archived = "archived"
 
 

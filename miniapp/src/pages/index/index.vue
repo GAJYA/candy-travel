@@ -5,7 +5,15 @@
         <text class="brand">Candy Travel</text>
         <text class="subtitle">{{ subtitle }}</text>
       </view>
-      <view class="topbar-menu">
+      <button
+        v-if="auth.isAuthenticated"
+        class="topbar-action"
+        @click="onShowJoinInvite"
+      >
+        <text class="topbar-action__mark">#</text>
+        <text>加入</text>
+      </button>
+      <view v-else class="topbar-menu">
         <text>•••</text>
       </view>
     </view>
@@ -108,6 +116,38 @@
       </view>
     </view>
 
+    <view v-if="joinOpen" class="modal-mask" @click="joinOpen = false">
+      <view class="join-sheet" @click.stop>
+        <view class="join-handle" />
+        <view class="join-head">
+          <view class="join-mark">
+            <text>#</text>
+          </view>
+          <view class="join-copy">
+            <text class="join-title">输入邀请码</text>
+            <text class="join-hint">加入好友的同行行程</text>
+          </view>
+          <button class="join-close" @click="joinOpen = false">×</button>
+        </view>
+        <view class="code-field">
+          <input
+            class="code-input"
+            :value="inviteCode"
+            maxlength="16"
+            placeholder="A7K9Q2"
+            @input="onInviteCodeInput"
+          />
+        </view>
+        <button
+          class="join-submit"
+          :disabled="!inviteCode || joiningInvite"
+          @click="onJoinInviteSubmit"
+        >
+          {{ joiningInvite ? '加入中...' : '加入同行' }}
+        </button>
+      </view>
+    </view>
+
     <CandyBottomNav active="home" />
   </view>
 </template>
@@ -117,13 +157,16 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 
 import CandyBottomNav from '../../components/CandyBottomNav.vue'
-import type { Trip } from '../../services/trip'
+import { tripApi, type Trip } from '../../services/trip'
 import { useAuthStore } from '../../stores/auth'
 import { useTripStore } from '../../stores/trip'
 
 const auth = useAuthStore()
 const trip = useTripStore()
 const now = ref(Date.now())
+const joinOpen = ref(false)
+const inviteCode = ref('')
+const joiningInvite = ref(false)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
 const subtitle = computed(() => {
@@ -157,7 +200,13 @@ const countdown = computed(() => {
 
 const statusLabel = (t: Trip): string => {
   if (t.status === 'draft') return t.startDate ? '待完善' : '待排期'
-  return ({ planning: '规划中', confirmed: '已确认', completed: '已完成', archived: '已归档' }[t.status])
+  return ({
+    planning: '规划中',
+    confirmed: '已确认',
+    completed: '已完成',
+    canceled: '已取消',
+    archived: '已归档',
+  }[t.status])
 }
 
 const dateSortValue = (t: Trip) => {
@@ -166,7 +215,7 @@ const dateSortValue = (t: Trip) => {
 }
 
 const isUpcomingTrip = (t: Trip) => {
-  if (!t.startDate || ['completed', 'archived'].includes(t.status)) return false
+  if (!t.startDate || ['completed', 'canceled', 'archived'].includes(t.status)) return false
   return new Date(`${t.startDate}T23:59:59`).getTime() >= now.value
 }
 
@@ -199,6 +248,35 @@ const onCreate = async () => {
 
 const onOpen = (id: string) => {
   uni.navigateTo({ url: `/pages/edit/index?id=${id}` })
+}
+
+const onShowJoinInvite = () => {
+  inviteCode.value = ''
+  joinOpen.value = true
+}
+
+const normalizeInviteCode = (value: string) =>
+  value.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 16)
+
+const onInviteCodeInput = (e: any) => {
+  inviteCode.value = normalizeInviteCode(String(e.detail.value || ''))
+}
+
+const onJoinInviteSubmit = async () => {
+  const code = normalizeInviteCode(inviteCode.value)
+  if (!code || joiningInvite.value) return
+  joiningInvite.value = true
+  try {
+    const accepted = await tripApi.acceptInvite(code)
+    await trip.loadList()
+    joinOpen.value = false
+    uni.showToast({ title: '已加入同行', icon: 'success' })
+    uni.navigateTo({ url: `/pages/edit/index?id=${accepted.tripId}` })
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '加入失败', icon: 'none' })
+  } finally {
+    joiningInvite.value = false
+  }
 }
 
 const refreshIfAuthed = async () => {
@@ -262,6 +340,32 @@ onUnmounted(() => {
   color: $candy-on-surface;
   background: $candy-surface-container-lowest;
   box-shadow: $candy-shadow-card;
+}
+.topbar-action {
+  margin: 0;
+  min-width: 112rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 22rpx;
+  border-radius: $candy-radius-full;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  background: $candy-surface-container-lowest;
+  color: $candy-primary;
+  font-size: $candy-font-label-md;
+  font-weight: 900;
+  box-shadow: $candy-shadow-card;
+}
+.topbar-action::after {
+  border: none;
+}
+.topbar-action__mark {
+  color: $candy-secondary;
+  font-size: 26rpx;
+  font-weight: 900;
 }
 
 .logged {
@@ -388,7 +492,6 @@ onUnmounted(() => {
   font-weight: 800;
   line-height: 1;
 }
-
 .section-head {
   display: flex;
   flex-direction: row;
@@ -521,5 +624,125 @@ onUnmounted(() => {
 }
 .empty-emoji {
   font-size: 80rpx;
+}
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(40, 19, 48, 0.4);
+}
+.join-sheet {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+  padding: 18rpx $candy-space-md 30rpx;
+  border-top-left-radius: $candy-radius-md;
+  border-top-right-radius: $candy-radius-md;
+  background: $candy-surface-container-lowest;
+}
+.join-handle {
+  align-self: center;
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: $candy-radius-full;
+  background: $candy-outline-variant;
+}
+.join-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 18rpx;
+}
+.join-mark {
+  flex: 0 0 64rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $candy-primary-fixed;
+  color: $candy-primary;
+  font-size: 34rpx;
+  font-weight: 900;
+}
+.join-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+.join-title {
+  color: $candy-on-surface;
+  font-size: 38rpx;
+  font-weight: 800;
+}
+.join-hint {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+}
+.join-close {
+  margin: 0;
+  flex: 0 0 58rpx;
+  width: 58rpx;
+  height: 58rpx;
+  line-height: 58rpx;
+  padding: 0;
+  border-radius: 50%;
+  background: $candy-surface-container;
+  color: $candy-on-surface-variant;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+.join-close::after {
+  border: none;
+}
+.code-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 108rpx;
+  padding: 0 24rpx;
+  border-radius: $candy-radius-sm;
+  background: $candy-surface-container-low;
+  border: 2rpx solid $candy-outline-variant;
+}
+.code-input {
+  width: 100%;
+  min-height: 72rpx;
+  text-align: center;
+  letter-spacing: 10rpx;
+  color: $candy-primary;
+  font-size: 48rpx;
+  font-weight: 900;
+}
+.join-submit {
+  margin: 0;
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0;
+  border-radius: $candy-radius-full;
+  background: $candy-primary;
+  color: $candy-on-primary;
+  font-size: $candy-font-body-lg;
+  font-weight: 900;
+  box-shadow: 0 12rpx 30rpx rgba(224, 64, 160, 0.2);
+}
+.join-submit::after {
+  border: none;
+}
+.join-submit[disabled] {
+  background: $candy-outline-variant;
+  color: $candy-on-surface-variant;
+  box-shadow: none;
 }
 </style>

@@ -39,7 +39,7 @@ const items: NavItem[] = [
   { key: 'home', icon: 'home', label: '首页', url: '/pages/index/index' },
   { key: 'calendar', icon: 'calendar', label: '日历', url: '/pages/calendar/index' },
   { key: 'ai', icon: 'ai', label: 'AI助手', disabled: true },
-  { key: 'profile', icon: 'user', label: '我的', disabled: true },
+  { key: 'profile', icon: 'user', label: '我的', url: '/pages/profile/index' },
 ]
 
 const onTap = async (item: NavItem) => {

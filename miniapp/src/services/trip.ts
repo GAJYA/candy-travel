@@ -1,6 +1,6 @@
 import { request } from './api'
 
-export type TripStatus = 'draft' | 'planning' | 'confirmed' | 'completed' | 'archived'
+export type TripStatus = 'draft' | 'planning' | 'confirmed' | 'completed' | 'canceled' | 'archived'
 export type TransportMode = 'flight' | 'train' | 'bus' | 'car'
 
 export interface Trip {
@@ -49,9 +49,28 @@ export interface TripDetail extends Trip {
   }
 }
 
+export interface TripMemberUser {
+  id: string
+  nickname: string | null
+  avatarUrl: string | null
+  locale: string
+  timezone: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TripMember {
+  id: string
+  tripId: string
+  role: 'owner' | 'editor'
+  user: TripMemberUser
+  createdAt: string
+}
+
 export interface TripCreatePayload {
   title: string
   destinationCity?: string
+  status?: TripStatus
   startDate?: string
   endDate?: string
   note?: string
@@ -71,6 +90,30 @@ export interface TripSummaryPatch {
   stay?: Partial<StaySummary> | null
 }
 
+export interface TripMemberAddPayload {
+  userId?: string
+  nickname?: string
+}
+
+export interface TripInvite {
+  tripId: string
+  code: string
+  expiresAt: string
+}
+
+export interface TripInvitePreview {
+  tripId: string
+  tripTitle: string
+  inviterNickname: string | null
+  status: 'active' | 'expired' | 'accepted'
+  expiresAt: string
+}
+
+export interface TripInviteAccept {
+  tripId: string
+  member: TripMember
+}
+
 export const tripApi = {
   list: () => request<Trip[]>('/trips'),
   create: (payload: TripCreatePayload) =>
@@ -78,6 +121,20 @@ export const tripApi = {
   get: (id: string) => request<TripDetail>(`/trips/${id}`),
   patchSummary: (id: string, payload: TripSummaryPatch) =>
     request<TripDetail>(`/trips/${id}/summary`, { method: 'PATCH', data: payload }),
+  listMembers: (id: string) => request<TripMember[]>(`/trips/${id}/members`),
+  addMember: (id: string, payload: TripMemberAddPayload) =>
+    request<TripMember>(`/trips/${id}/members`, { method: 'POST', data: payload }),
+  createInvite: (id: string) =>
+    request<TripInvite>(`/trips/${id}/invite`, { method: 'POST' }),
+  previewInvite: (code: string) =>
+    request<TripInvitePreview>(`/trip-invites/${encodeURIComponent(code)}`, {
+      auth: false,
+    }),
+  acceptInvite: (code: string) =>
+    request<TripInviteAccept>('/trip-invites/accept', {
+      method: 'POST',
+      data: { code },
+    }),
   delete: (id: string) =>
     request<void>(`/trips/${id}`, { method: 'DELETE' }),
 }

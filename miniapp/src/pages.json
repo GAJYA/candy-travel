@@ -17,6 +17,14 @@
 			}
 		},
 		{
+			"path": "pages/profile/index",
+			"style": {
+				"navigationBarTitleText": "我的",
+				"navigationBarBackgroundColor": "#fff7fb",
+				"backgroundColor": "#fff7fb"
+			}
+		},
+		{
 			"path": "pages/edit/index",
 			"style": {
 				"navigationBarTitleText": "编辑行程",

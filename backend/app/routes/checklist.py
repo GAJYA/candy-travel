@@ -13,26 +13,25 @@ from app.schemas.checklist import (
     ChecklistItemPatch,
     ChecklistTemplateOut,
 )
+from app.services.trip_access import accessible_trip_filter, get_accessible_trip
 
 router = APIRouter(tags=["checklist"])
 
 
 async def _get_user_trip(session, user_id: UUID, trip_id: UUID) -> Trip | None:
-    return await session.scalar(
-        select(Trip).where(
-            Trip.id == trip_id,
-            Trip.user_id == user_id,
-            Trip.deleted_at.is_(None),
-        )
-    )
+    return await get_accessible_trip(session, user_id=user_id, trip_id=trip_id)
 
 
 async def _get_user_item(
     session, user_id: UUID, item_id: UUID
 ) -> ChecklistItem | None:
     return await session.scalar(
-        select(ChecklistItem).where(
-            ChecklistItem.id == item_id, ChecklistItem.user_id == user_id
+        select(ChecklistItem)
+        .join(Trip, Trip.id == ChecklistItem.trip_id)
+        .where(
+            ChecklistItem.id == item_id,
+            Trip.deleted_at.is_(None),
+            accessible_trip_filter(user_id),
         )
     )
 
