@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import base64
+from typing import Any
 
 import httpx
 
@@ -9,6 +11,45 @@ from app.config import settings
 
 class AiClientError(Exception):
     """Raised when the OpenAI-compatible AI endpoint fails."""
+
+
+def extract_message_content(data: dict[str, Any]) -> str:
+    output_text = data.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text
+
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise AiClientError("AI response missing message content")
+
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        raise AiClientError("AI response missing message content")
+
+    message = choice.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str) and content.strip():
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        parts.append(text)
+                    elif isinstance(text, dict) and isinstance(text.get("value"), str):
+                        parts.append(text["value"])
+            if parts:
+                return "".join(parts)
+
+    text = choice.get("text")
+    if isinstance(text, str) and text.strip():
+        return text
+
+    raise AiClientError("AI response missing message content")
 
 
 class AiClient:
@@ -47,6 +88,21 @@ class AiClient:
             "messages": [{"role": "user", "content": content}],
         }
 
+        last_content_error: AiClientError | None = None
+        for attempt in range(3):
+            data = await self._post_chat_completion(payload)
+            try:
+                return extract_message_content(data)
+            except AiClientError as e:
+                last_content_error = e
+                if attempt < 2:
+                    await asyncio.sleep(0.4 * (attempt + 1))
+
+        if last_content_error is not None:
+            raise last_content_error
+        raise AiClientError("AI response missing message content")
+
+    async def _post_chat_completion(self, payload: dict[str, object]) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.post(
@@ -65,8 +121,10 @@ class AiClient:
         except httpx.HTTPError as e:
             raise AiClientError("AI request failed") from e
 
-        data = response.json()
         try:
-            return data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as e:
-            raise AiClientError("AI response missing message content") from e
+            data = response.json()
+        except ValueError as e:
+            raise AiClientError("AI response was not JSON") from e
+        if not isinstance(data, dict):
+            raise AiClientError("AI response must be a JSON object")
+        return data

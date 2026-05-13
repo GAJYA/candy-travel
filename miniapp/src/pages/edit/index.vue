@@ -1106,7 +1106,7 @@ const extractAiImportImages = async (paths: string[]) => {
     aiImportWarnings.value = result.warnings
     aiImportOpen.value = false
     if (!result.events.length) {
-      uni.showToast({ title: '未识别到可导入的行程信息', icon: 'none' })
+      uni.showToast({ title: result.warnings[0] || '未识别到可导入的行程信息', icon: 'none' })
       return
     }
     aiImportReviewOpen.value = true

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from app.config import settings
 from app.models import Trip
 from app.schemas.ai_import import AiTripEventCandidate
-from app.services.ai_client import AiClient
+from app.services.ai_client import AiClient, AiClientError
 
 
 class AiExtractionError(Exception):
@@ -129,6 +129,11 @@ async def extract_trip_events(
         timezone=timezone,
     )
     client = AiClient(model=settings.ai_model)
-    content = await client.describe_images(prompt=prompt, images=images)
+    try:
+        content = await client.describe_images(prompt=prompt, images=images)
+    except AiClientError as e:
+        if "missing message content" in str(e):
+            return [], ["AI 未返回可解析内容，请换一张更清晰的订单截图后重试。"], client.model
+        raise
     events, warnings = parse_ai_event_response(content)
     return events, warnings, client.model
