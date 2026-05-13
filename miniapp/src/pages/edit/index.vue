@@ -148,13 +148,22 @@
           </view>
           <text class="section-title">每日行程</text>
         </view>
-        <button
-          class="mini-action"
-          :disabled="!tripId"
-          @click="onShowEventAdd"
-        >
-          ＋ 添加事件
-        </button>
+        <view class="section-actions">
+          <button
+            class="mini-action mini-action--secondary"
+            :disabled="!tripId"
+            @click="onShowAiImport"
+          >
+            AI导入
+          </button>
+          <button
+            class="mini-action"
+            :disabled="!tripId"
+            @click="onShowEventAdd"
+          >
+            ＋ 添加事件
+          </button>
+        </view>
       </view>
 
       <view class="candy-card event-panel">
@@ -313,6 +322,66 @@
       </view>
     </view>
 
+    <!-- AI 补充行程弹层 -->
+    <view v-if="aiImportOpen" class="modal-mask" @click="aiImportOpen = false">
+      <view class="modal" @click.stop>
+        <text class="modal-title">AI 补充行程</text>
+        <view class="ai-import-card">
+          <view class="ai-import-card__icon">
+            <CandyIcon name="sparkle" />
+          </view>
+          <view class="ai-import-card__copy">
+            <text class="ai-import-card__title">上传订单截图</text>
+            <text class="ai-import-card__hint">支持飞机、高铁、酒店订单截图。图片仅用于本次识别，不会保存。</text>
+          </view>
+        </view>
+        <view class="modal-actions">
+          <button class="candy-btn candy-btn--ghost" :disabled="aiImportLoading" @click="aiImportOpen = false">取消</button>
+          <button class="candy-btn candy-btn--primary" :disabled="aiImportLoading" @click="onChooseAiImportImages">
+            {{ aiImportLoading ? '识别中…' : '选择截图' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <!-- AI 候选事件审核弹层 -->
+    <view v-if="aiImportReviewOpen" class="modal-mask" @click="aiImportReviewOpen = false">
+      <view class="modal modal--event" @click.stop>
+        <text class="modal-title">识别到 {{ aiImportCandidates.length }} 个行程事件</text>
+        <view v-if="aiImportWarnings.length" class="ai-warning-list">
+          <text v-for="warning in aiImportWarnings" :key="warning" class="candy-text-error">{{ warning }}</text>
+        </view>
+        <scroll-view class="event-modal-scroll" scroll-y :show-scrollbar="false">
+          <view class="ai-candidate-list">
+            <view v-for="candidate in aiImportCandidates" :key="candidate.clientId" class="ai-candidate-card">
+              <view class="ai-candidate-card__head">
+                <view class="event-icon-badge">
+                  <CandyIcon :name="normalizeIconName(candidate.meta?.icon, 'sparkle')" />
+                </view>
+                <view class="ai-candidate-card__copy">
+                  <text class="event-title">{{ candidate.title }}</text>
+                  <text class="event-meta">{{ candidateTimeLabel(candidate) }}</text>
+                  <text v-if="candidate.locationName" class="event-meta">地点：{{ candidate.locationName }}</text>
+                  <text class="event-meta">置信度：{{ confidenceLabel(candidate.confidence) }}</text>
+                  <text v-if="candidate.warnings.length" class="candy-text-error">{{ candidate.warnings.join('；') }}</text>
+                </view>
+              </view>
+              <view class="ai-candidate-card__actions">
+                <button class="mini-action mini-action--secondary" @click="onEditAiCandidate(candidate)">编辑</button>
+                <button class="mini-action mini-action--secondary" @click="onRemoveAiCandidate(candidate.clientId)">移除</button>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+        <view class="modal-actions">
+          <button class="candy-btn candy-btn--ghost" :disabled="aiImportLoading" @click="aiImportReviewOpen = false">取消</button>
+          <button class="candy-btn candy-btn--primary" :disabled="!canSaveAiCandidates || aiImportLoading" @click="onSaveAiCandidates">
+            {{ aiImportLoading ? '保存中…' : '保存到行程' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
     <!-- 添加事件弹层 -->
     <view v-if="eventAddOpen" class="modal-mask" @click="eventAddOpen = false">
       <view class="modal modal--event" @click.stop>
@@ -463,6 +532,10 @@ import {
   tripEventApi,
   type TripEvent,
 } from '../../services/trip-event'
+import {
+  aiImportApi,
+  type AiTripEventCandidate,
+} from '../../services/ai-import'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
@@ -487,6 +560,11 @@ const allowLeave = ref(false)
 const eventLoading = ref(false)
 const eventAddOpen = ref(false)
 const eventEditingId = ref<string>('')
+const aiImportOpen = ref(false)
+const aiImportReviewOpen = ref(false)
+const aiImportLoading = ref(false)
+const aiImportCandidates = ref<AiTripEventCandidate[]>([])
+const aiImportWarnings = ref<string[]>([])
 
 interface EventFormState {
   icon: string
@@ -993,6 +1071,125 @@ const onShowEventAdd = async () => {
   eventAddOpen.value = true
 }
 
+const onShowAiImport = async () => {
+  if (!tripId.value) {
+    uni.showToast({ title: '请先保存行程', icon: 'none' })
+    return
+  }
+  if (hasUnsavedChanges()) {
+    uni.showToast({ title: '请先保存当前行程', icon: 'none' })
+    return
+  }
+  aiImportOpen.value = true
+}
+
+const onChooseAiImportImages = () => {
+  if (aiImportLoading.value) return
+  uni.chooseImage({
+    count: 6,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success: (res) => {
+      const rawPaths = res.tempFilePaths || []
+      const paths = Array.isArray(rawPaths) ? rawPaths : [rawPaths]
+      if (!paths.length) return
+      void extractAiImportImages(paths)
+    },
+  })
+}
+
+const extractAiImportImages = async (paths: string[]) => {
+  aiImportLoading.value = true
+  try {
+    const result = await aiImportApi.extractTripEvents(tripId.value, paths)
+    aiImportCandidates.value = result.events
+    aiImportWarnings.value = result.warnings
+    aiImportOpen.value = false
+    if (!result.events.length) {
+      uni.showToast({ title: '未识别到可导入的行程信息', icon: 'none' })
+      return
+    }
+    aiImportReviewOpen.value = true
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '识别失败', icon: 'none' })
+  } finally {
+    aiImportLoading.value = false
+  }
+}
+
+const candidateTimeLabel = (candidate: AiTripEventCandidate) => {
+  if (!candidate.startAt) return '时间待补充'
+  if (candidate.meta?.allDay === true) {
+    if (candidate.endAt) return `${datePart(candidate.startAt)} - ${datePart(candidate.endAt)}`
+    return datePart(candidate.startAt)
+  }
+  const start = `${datePart(candidate.startAt)} ${formatEventTime(candidate.startAt)}`
+  if (!candidate.endAt) return start
+  return `${start} - ${formatEventTime(candidate.endAt)}`
+}
+
+const confidenceLabel = (confidence: string) => (
+  { high: '高', medium: '中', low: '低' }[confidence] || '中'
+)
+
+const canSaveAiCandidates = computed(() => (
+  aiImportCandidates.value.length > 0
+  && aiImportCandidates.value.every((candidate) => Boolean(candidate.title.trim() && candidate.startAt))
+))
+
+const onRemoveAiCandidate = (clientId: string) => {
+  aiImportCandidates.value = aiImportCandidates.value.filter((candidate) => candidate.clientId !== clientId)
+}
+
+const onEditAiCandidate = (candidate: AiTripEventCandidate) => {
+  eventEditingId.value = `ai:${candidate.clientId}`
+  eventForm.icon = normalizeIconName(candidate.meta?.icon, 'sparkle')
+  eventForm.title = candidate.title
+  eventForm.date = candidate.startAt ? datePart(candidate.startAt) : (form.departDate || datePart(new Date().toISOString()))
+  eventForm.allDay = candidate.meta?.allDay === true
+  eventForm.startTime = candidate.startAt && !eventForm.allDay ? formatEventTime(candidate.startAt) : ''
+  eventForm.endTime = candidate.endAt && !eventForm.allDay ? formatEventTime(candidate.endAt) : ''
+  eventForm.locationName = candidate.locationName || ''
+  eventForm.note = candidate.note || ''
+  eventAddOpen.value = true
+}
+
+const updateAiCandidateFromEventForm = (clientId: string) => {
+  const startAt = buildIsoDateTime(eventForm.date, eventForm.startTime)
+  const endAt = !eventForm.allDay && eventForm.endTime ? buildIsoDateTime(eventForm.date, eventForm.endTime) : null
+  aiImportCandidates.value = aiImportCandidates.value.map((candidate) => {
+    if (candidate.clientId !== clientId) return candidate
+    const warnings = candidate.warnings.filter((warning) => warning !== '缺少开始时间')
+    return {
+      ...candidate,
+      title: eventForm.title.trim(),
+      startAt,
+      endAt,
+      locationName: eventForm.locationName.trim() || null,
+      note: eventForm.note.trim() || null,
+      meta: { ...candidate.meta, icon: eventForm.icon, allDay: eventForm.allDay },
+      warnings: startAt ? warnings : [...warnings, '缺少开始时间'],
+    }
+  })
+}
+
+const onSaveAiCandidates = async () => {
+  if (!canSaveAiCandidates.value || aiImportLoading.value) return
+  aiImportLoading.value = true
+  try {
+    await aiImportApi.importTripEvents(tripId.value, aiImportCandidates.value)
+    await loadEvents()
+    aiImportReviewOpen.value = false
+    aiImportCandidates.value = []
+    aiImportWarnings.value = []
+    uni.showToast({ title: '已导入行程', icon: 'success' })
+  } catch (e) {
+    uni.showToast({ title: e instanceof Error ? e.message : '保存失败', icon: 'none' })
+  } finally {
+    aiImportLoading.value = false
+  }
+}
+
 const onEditEvent = (event: TripEvent) => {
   if (!canEditEvent(event)) {
     uni.showToast({ title: '交通信息请在上方修改', icon: 'none' })
@@ -1052,6 +1249,13 @@ const onEventAddSubmit = async () => {
   if (!startAt) return
   const isAllDay = eventForm.allDay
   const endAt = !isAllDay && eventForm.endTime ? buildIsoDateTime(eventForm.date, eventForm.endTime) : null
+  if (eventEditingId.value.startsWith('ai:')) {
+    updateAiCandidateFromEventForm(eventEditingId.value.slice(3))
+    eventAddOpen.value = false
+    eventEditingId.value = ''
+    uni.showToast({ title: '已更新候选项', icon: 'success' })
+    return
+  }
   try {
     if (eventEditingId.value) {
       const updated = await tripEventApi.patch(eventEditingId.value, {
@@ -1263,6 +1467,11 @@ const onAddSubmit = async () => {
 }
 .section-head--split {
   justify-content: space-between;
+}
+.section-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 12rpx;
 }
 .section-title-row {
   display: flex;
@@ -1943,6 +2152,90 @@ const onAddSubmit = async () => {
   font-size: 20rpx;
   font-weight: 800;
   color: $candy-on-surface-variant;
+}
+.ai-import-card {
+  display: flex;
+  flex-direction: row;
+  gap: 18rpx;
+  padding: 22rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-low;
+}
+.ai-import-card__icon {
+  flex: 0 0 72rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $candy-primary;
+  background: $candy-primary-fixed;
+  font-size: 38rpx;
+}
+.ai-import-card__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.ai-import-card__title {
+  font-size: $candy-font-body-lg;
+  font-weight: 800;
+  color: $candy-on-surface;
+}
+.ai-import-card__hint {
+  font-size: $candy-font-label-md;
+  color: $candy-on-surface-variant;
+  line-height: 1.5;
+}
+.ai-warning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 14rpx 18rpx;
+  border-radius: $candy-radius-md;
+  background: rgba(186, 26, 26, 0.08);
+}
+.candy-text-error {
+  color: $candy-error;
+  font-size: $candy-font-label-md;
+  line-height: 1.4;
+}
+.ai-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  padding-bottom: 4rpx;
+}
+.ai-candidate-card {
+  padding: 18rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-low;
+}
+.ai-candidate-card__head {
+  display: flex;
+  flex-direction: row;
+  gap: 16rpx;
+}
+.ai-candidate-card__head .event-icon-badge {
+  flex: 0 0 58rpx;
+  margin-top: 0;
+}
+.ai-candidate-card__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.ai-candidate-card__actions {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 12rpx;
 }
 .invite-card {
   display: flex;

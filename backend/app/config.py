@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,20 @@ class Settings(BaseSettings):
 
     wechat_appid: str = ""
     wechat_appsecret: str = ""
+
+    ai_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("AI_BASE_URL", "baseURL"),
+    )
+    ai_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("AI_API_KEY", "apiKey"),
+    )
+    ai_model: str = Field(default="gpt-5.5", validation_alias="AI_MODEL")
+    ai_timeout_seconds: int = Field(default=60, validation_alias="AI_TIMEOUT_SECONDS")
+    ai_max_images: int = Field(default=6, validation_alias="AI_MAX_IMAGES")
+    ai_max_image_mb: int = Field(default=8, validation_alias="AI_MAX_IMAGE_MB")
+    ai_max_total_image_mb: int = Field(default=24, validation_alias="AI_MAX_TOTAL_IMAGE_MB")
 
 
 settings = Settings()

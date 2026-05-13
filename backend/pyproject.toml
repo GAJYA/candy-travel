@@ -15,6 +15,7 @@ dependencies = [
     "httpx>=0.28",
     "greenlet>=3.5.0",
     "pyjwt>=2.12.1",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]

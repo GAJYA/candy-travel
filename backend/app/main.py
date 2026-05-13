@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import auth, checklist, health, me, trip_events, trip_invites, trips
+from app.routes import ai_import, auth, checklist, health, me, trip_events, trip_invites, trips
 
 app = FastAPI(title="CandyTravel Backend", version="0.1.0")
 
@@ -23,5 +23,6 @@ app.include_router(auth.router, prefix=api_v1)
 app.include_router(me.router, prefix=api_v1)
 app.include_router(trips.router, prefix=api_v1)
 app.include_router(trip_events.router, prefix=api_v1)
+app.include_router(ai_import.router, prefix=api_v1)
 app.include_router(trip_invites.router, prefix=api_v1)
 app.include_router(checklist.router, prefix=api_v1)
