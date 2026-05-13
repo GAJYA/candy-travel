@@ -323,7 +323,7 @@
     </view>
 
     <!-- AI 补充行程弹层 -->
-    <view v-if="aiImportOpen" class="modal-mask" @click="aiImportOpen = false">
+    <view v-if="aiImportOpen" class="modal-mask" @click="onCloseAiImport">
       <view class="modal" @click.stop>
         <text class="modal-title">AI 补充行程</text>
         <view class="ai-import-card">
@@ -335,8 +335,20 @@
             <text class="ai-import-card__hint">支持飞机、高铁、酒店订单截图。图片仅用于本次识别，不会保存。</text>
           </view>
         </view>
+        <view v-if="aiImportLoading" class="ai-import-status">
+          <view class="ai-import-spinner" />
+          <view class="ai-import-status__copy">
+            <text class="ai-import-status__title">{{ aiImportStatusTitle }}</text>
+            <text class="ai-import-status__hint">{{ aiImportStatusHint }}</text>
+            <view class="ai-import-progress">
+              <view class="ai-import-progress__bar" :style="{ width: `${aiImportProgressPercent}%` }" />
+            </view>
+          </view>
+        </view>
         <view class="modal-actions">
-          <button class="candy-btn candy-btn--ghost" :disabled="aiImportLoading" @click="aiImportOpen = false">取消</button>
+          <button class="candy-btn candy-btn--ghost" @click="onCloseAiImport">
+            {{ aiImportLoading ? '取消识别' : '取消' }}
+          </button>
           <button class="candy-btn candy-btn--primary" :disabled="aiImportLoading" @click="onChooseAiImportImages">
             {{ aiImportLoading ? '识别中…' : '选择截图' }}
           </button>
@@ -517,7 +529,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onBackPress, onLoad, onShow } from '@dcloudio/uni-app'
+import { onBackPress, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 
 import CandyIcon from '../../components/CandyIcon.vue'
 import type { TransportMode, TripDetail, TripInvite, TripMember, TripStatus } from '../../services/trip'
@@ -534,6 +546,8 @@ import {
 } from '../../services/trip-event'
 import {
   aiImportApi,
+  type AiImportPhase,
+  type AiImportUploadTask,
   type AiTripEventCandidate,
 } from '../../services/ai-import'
 import { useAuthStore } from '../../stores/auth'
@@ -565,6 +579,14 @@ const aiImportReviewOpen = ref(false)
 const aiImportLoading = ref(false)
 const aiImportCandidates = ref<AiTripEventCandidate[]>([])
 const aiImportWarnings = ref<string[]>([])
+const aiImportElapsedSeconds = ref(0)
+const aiImportUploadProgress = ref(0)
+const aiImportCurrentImage = ref(0)
+const aiImportTotalImages = ref(0)
+const aiImportPhase = ref<AiImportPhase>('uploading')
+const aiImportTask = ref<AiImportUploadTask | null>(null)
+let aiImportTimer: ReturnType<typeof setInterval> | null = null
+let aiImportRunId = 0
 
 interface EventFormState {
   icon: string
@@ -697,6 +719,31 @@ const tripDateSummary = computed(() => {
   return '日期未定'
 })
 
+const aiImportProgressPercent = computed(() => {
+  if (!aiImportLoading.value) return 0
+  if (aiImportPhase.value === 'uploading') return Math.max(8, aiImportUploadProgress.value)
+  if (aiImportElapsedSeconds.value < 20) return 72
+  if (aiImportElapsedSeconds.value < 60) return 84
+  if (aiImportElapsedSeconds.value < 100) return 92
+  return 96
+})
+
+const aiImportStatusTitle = computed(() => (
+  aiImportPhase.value === 'uploading' ? '正在上传截图' : 'AI 正在识别订单'
+))
+
+const aiImportStatusHint = computed(() => {
+  if (aiImportPhase.value === 'uploading') {
+    const current = aiImportCurrentImage.value || 1
+    const total = aiImportTotalImages.value || 1
+    return `正在上传第 ${current}/${total} 张，已完成 ${aiImportUploadProgress.value}%`
+  }
+  if (aiImportElapsedSeconds.value >= 90) {
+    return `已等待 ${aiImportElapsedSeconds.value} 秒，复杂截图会更久；可以继续等待或取消后重试`
+  }
+  return `已等待 ${aiImportElapsedSeconds.value} 秒，通常需要 20-60 秒`
+})
+
 onLoad((opts?: Record<string, string | undefined>) => {
   if (opts?.id) {
     tripId.value = opts.id
@@ -718,6 +765,11 @@ onBackPress(() => {
     uni.navigateBack()
   })
   return true
+})
+
+onUnload(() => {
+  stopAiImportTimer()
+  aiImportTask.value?.abort()
 })
 
 const load = async () => {
@@ -1083,6 +1135,55 @@ const onShowAiImport = async () => {
   aiImportOpen.value = true
 }
 
+const startAiImportTimer = () => {
+  stopAiImportTimer()
+  aiImportElapsedSeconds.value = 0
+  aiImportTimer = setInterval(() => {
+    aiImportElapsedSeconds.value += 1
+  }, 1000)
+}
+
+const stopAiImportTimer = () => {
+  if (aiImportTimer) {
+    clearInterval(aiImportTimer)
+    aiImportTimer = null
+  }
+}
+
+const resetAiImportProgress = (total: number) => {
+  aiImportPhase.value = 'uploading'
+  aiImportUploadProgress.value = 0
+  aiImportCurrentImage.value = total > 0 ? 1 : 0
+  aiImportTotalImages.value = total
+}
+
+const onCloseAiImport = () => {
+  if (!aiImportLoading.value) {
+    aiImportOpen.value = false
+    return
+  }
+  aiImportRunId += 1
+  aiImportTask.value?.abort()
+  aiImportTask.value = null
+  aiImportLoading.value = false
+  stopAiImportTimer()
+  uni.showToast({ title: '已取消识别', icon: 'none' })
+}
+
+const showAiImportError = (message: string) => {
+  if (message.includes('uploadFile 合法域名') || message.length > 28) {
+    uni.showModal({
+      title: '识别失败',
+      content: message,
+      showCancel: false,
+      confirmText: '知道了',
+      confirmColor: '#e040a0',
+    })
+    return
+  }
+  uni.showToast({ title: message || '识别失败', icon: 'none' })
+}
+
 const onChooseAiImportImages = () => {
   if (aiImportLoading.value) return
   uni.chooseImage({
@@ -1099,9 +1200,26 @@ const onChooseAiImportImages = () => {
 }
 
 const extractAiImportImages = async (paths: string[]) => {
+  const runId = aiImportRunId + 1
+  aiImportRunId = runId
   aiImportLoading.value = true
+  resetAiImportProgress(paths.length)
+  startAiImportTimer()
   try {
-    const result = await aiImportApi.extractTripEvents(tripId.value, paths)
+    const result = await aiImportApi.extractTripEvents(tripId.value, paths, {
+      timeoutMs: 150000,
+      onUploadTask: (task) => {
+        if (runId === aiImportRunId) aiImportTask.value = task
+      },
+      onProgress: (progress) => {
+        if (runId !== aiImportRunId) return
+        aiImportPhase.value = progress.phase
+        aiImportCurrentImage.value = progress.current
+        aiImportTotalImages.value = progress.total
+        aiImportUploadProgress.value = progress.uploadProgress
+      },
+    })
+    if (runId !== aiImportRunId) return
     aiImportCandidates.value = result.events
     aiImportWarnings.value = result.warnings
     aiImportOpen.value = false
@@ -1111,9 +1229,14 @@ const extractAiImportImages = async (paths: string[]) => {
     }
     aiImportReviewOpen.value = true
   } catch (e) {
-    uni.showToast({ title: e instanceof Error ? e.message : '识别失败', icon: 'none' })
+    if (runId !== aiImportRunId) return
+    showAiImportError(e instanceof Error ? e.message : '识别失败')
   } finally {
-    aiImportLoading.value = false
+    if (runId === aiImportRunId) {
+      aiImportLoading.value = false
+      aiImportTask.value = null
+      stopAiImportTimer()
+    }
   }
 }
 
@@ -2189,6 +2312,63 @@ const onAddSubmit = async () => {
   font-size: $candy-font-label-md;
   color: $candy-on-surface-variant;
   line-height: 1.5;
+}
+.ai-import-status {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 18rpx;
+  padding: 20rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-lowest;
+  border: 2rpx solid $candy-outline-variant;
+}
+.ai-import-spinner {
+  flex: 0 0 54rpx;
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 50%;
+  border: 6rpx solid $candy-primary-fixed;
+  border-top-color: $candy-primary;
+  animation: ai-import-spin 1s linear infinite;
+}
+.ai-import-status__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.ai-import-status__title {
+  color: $candy-on-surface;
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+}
+.ai-import-status__hint {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  line-height: 1.45;
+}
+.ai-import-progress {
+  width: 100%;
+  height: 10rpx;
+  overflow: hidden;
+  border-radius: $candy-radius-full;
+  background: $candy-surface-container;
+}
+.ai-import-progress__bar {
+  height: 100%;
+  border-radius: $candy-radius-full;
+  background: $candy-primary;
+  transition: width 0.25s ease;
+}
+@keyframes ai-import-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .ai-warning-list {
   display: flex;
