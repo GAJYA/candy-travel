@@ -26,6 +26,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("AI_API_KEY", "apiKey"),
     )
     ai_model: str = Field(default="gpt-5.5", validation_alias="AI_MODEL")
+    ai_reasoning_effort: str = Field(default="low", validation_alias="AI_REASONING_EFFORT")
     ai_timeout_seconds: int = Field(default=60, validation_alias="AI_TIMEOUT_SECONDS")
     ai_max_images: int = Field(default=6, validation_alias="AI_MAX_IMAGES")
     ai_max_image_mb: int = Field(default=8, validation_alias="AI_MAX_IMAGE_MB")

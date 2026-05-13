@@ -59,11 +59,13 @@ class AiClient:
         base_url: str | None = None,
         api_key: str | None = None,
         model: str | None = None,
+        reasoning_effort: str | None = None,
         timeout_seconds: int | None = None,
     ) -> None:
         self.base_url = (base_url or settings.ai_base_url).rstrip("/")
         self.api_key = api_key or settings.ai_api_key
         self.model = model or settings.ai_model
+        self.reasoning_effort = reasoning_effort or settings.ai_reasoning_effort
         self.timeout_seconds = timeout_seconds or settings.ai_timeout_seconds
 
     async def describe_images(self, *, prompt: str, images: list[tuple[bytes, str]]) -> str:
@@ -84,6 +86,7 @@ class AiClient:
 
         payload = {
             "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
             "stream": False,
             "messages": [{"role": "user", "content": content}],
         }
