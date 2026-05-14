@@ -358,12 +358,12 @@
 
     <!-- AI 候选事件审核弹层 -->
     <view v-if="aiImportReviewOpen" class="modal-mask" @click="aiImportReviewOpen = false">
-      <view class="modal modal--event" @click.stop>
+      <view class="modal modal--event modal--ai-review" @click.stop>
         <text class="modal-title">识别到 {{ aiImportCandidates.length }} 个行程事件</text>
         <view v-if="aiImportWarnings.length" class="ai-warning-list">
           <text v-for="warning in aiImportWarnings" :key="warning" class="candy-text-error">{{ warning }}</text>
         </view>
-        <scroll-view class="event-modal-scroll" scroll-y :show-scrollbar="false">
+        <scroll-view class="event-modal-scroll ai-review-scroll" scroll-y :show-scrollbar="false">
           <view class="ai-candidate-list">
             <view v-for="candidate in aiImportCandidates" :key="candidate.clientId" class="ai-candidate-card">
               <view class="ai-candidate-card__head">
@@ -2184,11 +2184,22 @@ const onAddSubmit = async () => {
 }
 .modal--event {
   max-height: calc(86vh - env(safe-area-inset-bottom));
+  overflow: hidden;
 }
 .event-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   max-height: calc(86vh - 230rpx - env(safe-area-inset-bottom));
   box-sizing: border-box;
+}
+.modal--ai-review {
+  height: calc(86vh - env(safe-area-inset-bottom));
+}
+.ai-review-scroll {
+  flex: 1 1 0;
+  height: 0;
+  max-height: none;
 }
 .event-modal-content {
   display: flex;
@@ -2587,6 +2598,7 @@ const onAddSubmit = async () => {
   color: $candy-on-primary;
 }
 .modal-actions {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: row;
   gap: $candy-space-sm;
