@@ -1898,11 +1898,13 @@ const onAddSubmit = async () => {
   display: flex;
   flex-direction: column;
   gap: $candy-space-sm;
+  min-width: 0;
 }
 .event-day {
   display: flex;
   flex-direction: column;
   gap: $candy-space-xs;
+  min-width: 0;
 }
 .event-day__head {
   display: flex;
@@ -1922,8 +1924,9 @@ const onAddSubmit = async () => {
 }
 .event-timeline-row {
   display: grid;
-  grid-template-columns: 100rpx 66rpx 1fr;
+  grid-template-columns: 100rpx 66rpx minmax(0, 1fr);
   min-height: 136rpx;
+  min-width: 0;
 }
 .event-timeline-time {
   padding-top: 26rpx;
@@ -1948,6 +1951,8 @@ const onAddSubmit = async () => {
 }
 .event-card {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
