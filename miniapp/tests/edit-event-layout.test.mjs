@@ -67,3 +67,36 @@ test('map coordinate removal is hidden behind row swipe actions', () => {
     'selected map summary should not show a persistent coordinate removal button',
   )
 })
+
+test('revealed swipe row removes the foreground right corner seam', () => {
+  const revealedRow = styleBlock('.map-route-swipe-row--revealed .map-route-row')
+
+  assert.match(
+    revealedRow,
+    /border-top-right-radius:\s*0\s*;/,
+    'revealed foreground row should not keep a rounded right edge before the action button',
+  )
+  assert.match(
+    revealedRow,
+    /border-bottom-right-radius:\s*0\s*;/,
+    'revealed foreground row should not show a rounded bottom-right seam',
+  )
+})
+
+test('selecting a map route remounts the native map viewport', () => {
+  assert.match(
+    source,
+    /:key="tripMapViewportKey"/,
+    'native map should have a reactive key so first selection applies the new center immediately',
+  )
+  assert.match(
+    source,
+    /tripMapViewportKey\s*=\s*ref\(0\)/,
+    'map viewport key should be reactive state',
+  )
+  assert.match(
+    source,
+    /tripMapViewportKey\.value\s*\+=\s*1/,
+    'selecting a route should refresh the map viewport',
+  )
+})

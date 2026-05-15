@@ -265,6 +265,7 @@
         </view>
         <map
           v-if="tripMapData.mappableEvents.length"
+          :key="tripMapViewportKey"
           class="route-map"
           :latitude="tripMapData.center.latitude"
           :longitude="tripMapData.center.longitude"
@@ -803,6 +804,7 @@ const tripEvents = ref<TripEvent[]>([])
 const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
 const tripMapFocusMode = ref<TripMapFocusMode>('destination')
 const selectedTripMapEventId = ref<string>('')
+const tripMapViewportKey = ref(0)
 const swipedMapRouteEventId = ref<string>('')
 const mapRouteSwipeStart = reactive({
   eventId: '',
@@ -1238,19 +1240,27 @@ const eventTimeRange = (event: TripEvent) => {
 const canDeleteEvent = (event: TripEvent) => Boolean(event.meta?.icon) || ['activity', 'reminder'].includes(event.eventType)
 const canEditEvent = canDeleteEvent
 
+const refreshTripMapViewport = () => {
+  tripMapViewportKey.value += 1
+}
+
 const setTripMapFocusMode = (mode: TripMapFocusMode) => {
   tripMapFocusMode.value = mode
   selectedTripMapEventId.value = ''
+  swipedMapRouteEventId.value = ''
+  refreshTripMapViewport()
 }
 
 const clearTripMapSelection = () => {
   selectedTripMapEventId.value = ''
   swipedMapRouteEventId.value = ''
+  refreshTripMapViewport()
 }
 
 const onSelectMapRouteEvent = (event: TripEvent) => {
   selectedTripMapEventId.value = event.id
   swipedMapRouteEventId.value = ''
+  refreshTripMapViewport()
 }
 
 const getTouchPoint = (e: any) => {
@@ -1320,7 +1330,7 @@ const onTripMapMarkerTap = (e: any) => {
   const markerId = Number(e?.detail?.markerId)
   if (!Number.isFinite(markerId)) return
   const event = tripMapData.value.mappableEvents[markerId - 1]
-  if (event) selectedTripMapEventId.value = event.id
+  if (event) onSelectMapRouteEvent(event)
 }
 
 const onDepartDateChange = (e: any) => {
@@ -3008,6 +3018,8 @@ const onAddSubmit = async () => {
   color: #ffffff;
   font-size: 22rpx;
   font-weight: 800;
+  border-top-right-radius: $candy-radius-md;
+  border-bottom-right-radius: $candy-radius-md;
 }
 .map-route-row-action[disabled] {
   background: #ecd2e6;
@@ -3031,6 +3043,8 @@ const onAddSubmit = async () => {
 }
 .map-route-swipe-row--revealed .map-route-row {
   transform: translateX(-164rpx);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .map-route-row--active {
   background: $candy-primary-fixed;
