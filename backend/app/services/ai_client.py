@@ -105,6 +105,20 @@ class AiClient:
             raise last_content_error
         raise AiClientError("AI response missing message content")
 
+    async def complete_text(self, *, prompt: str) -> str:
+        if not self.base_url or not self.api_key:
+            raise AiClientError("AI service is not configured")
+
+        payload = {
+            "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
+            "stream": False,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+
+        data = await self._post_chat_completion(payload)
+        return extract_message_content(data)
+
     async def _post_chat_completion(self, payload: dict[str, object]) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
