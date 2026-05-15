@@ -31,3 +31,21 @@ test('event card grid item can shrink inside the timeline column', () => {
     'long event titles must not force the grid column wider than the event panel',
   )
 })
+
+test('map route list is collapsed behind a summary by default', () => {
+  assert.match(
+    source,
+    /showTripMapStops\s*=\s*ref\(false\)/,
+    'map route stops should not render as a full dense list by default',
+  )
+  assert.match(
+    source,
+    /class="map-route-selected"/,
+    'map view should show one selected stop summary instead of only the full list',
+  )
+  assert.match(
+    source,
+    /v-if="showTripMapStops"/,
+    'full map stop list should be explicitly expandable',
+  )
+})

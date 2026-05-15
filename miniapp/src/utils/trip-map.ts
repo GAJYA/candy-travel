@@ -8,6 +8,9 @@ export interface TripMapPoint {
 export interface TripMapMarker extends TripMapPoint {
   id: number
   title: string
+  width: number
+  height: number
+  alpha: number
   label: {
     content: string
     color: string
@@ -97,18 +100,31 @@ const distanceKm = (a: TripMapPoint, b: TripMapPoint) => {
   return 2 * earthRadiusKm * Math.asin(Math.sqrt(h))
 }
 
-const destinationStartIndex = (events: TripEvent[]) => {
-  if (events.length < 3) return 0
-  let maxJumpKm = 0
+const LONG_DISTANCE_JUMP_KM = 50
+
+const destinationRange = (events: TripEvent[]) => {
+  const wholeRoute = { startIndex: 0, endIndex: events.length }
+  if (events.length < 3) return wholeRoute
+
   let startIndex = 0
   for (let index = 1; index < events.length; index += 1) {
     const jumpKm = distanceKm(toMapPoint(events[index - 1]), toMapPoint(events[index]))
-    if (jumpKm > maxJumpKm) {
-      maxJumpKm = jumpKm
+    if (jumpKm >= LONG_DISTANCE_JUMP_KM && events.length - index >= 2) {
       startIndex = index
+      break
     }
   }
-  return maxJumpKm >= 50 && events.length - startIndex >= 2 ? startIndex : 0
+
+  let endIndex = events.length
+  for (let index = events.length - 1; index > startIndex; index -= 1) {
+    const jumpKm = distanceKm(toMapPoint(events[index - 1]), toMapPoint(events[index]))
+    if (jumpKm >= LONG_DISTANCE_JUMP_KM && index - startIndex >= 2) {
+      endIndex = index
+      break
+    }
+  }
+
+  return { startIndex, endIndex }
 }
 
 export const buildTripMapData = (
@@ -120,11 +136,11 @@ export const buildTripMapData = (
   const missingLocationEvents = sorted.filter((event) => (
     !hasEventCoordinates(event) && shouldPromptForMapLocation(event)
   ))
-  const startIndex = destinationStartIndex(allMappableEvents)
-  const hasDestinationFocus = startIndex > 0
+  const { startIndex, endIndex } = destinationRange(allMappableEvents)
+  const hasDestinationFocus = startIndex > 0 || endIndex < allMappableEvents.length
   const focusMode = options.focusMode === 'all' || !hasDestinationFocus ? 'all' : 'destination'
   const mappableEvents = focusMode === 'destination'
-    ? allMappableEvents.slice(startIndex)
+    ? allMappableEvents.slice(startIndex, endIndex)
     : allMappableEvents
   const includePoints = mappableEvents.map(toMapPoint)
   const markers = mappableEvents.map((event, index) => {
@@ -134,30 +150,20 @@ export const buildTripMapData = (
       latitude: event.latitude as number,
       longitude: event.longitude as number,
       title: eventLocationLabel(event),
+      width: isSelected ? 28 : 22,
+      height: isSelected ? 34 : 28,
+      alpha: isSelected ? 1 : 0.72,
       label: {
         content: String(index + 1),
         color: '#ffffff',
-        fontSize: 13,
-        borderRadius: 14,
+        fontSize: isSelected ? 13 : 11,
+        borderRadius: 12,
         bgColor: isSelected ? '#7b4ab0' : '#e040a0',
-        padding: 6,
+        padding: isSelected ? 6 : 4,
         textAlign: 'center' as const,
-        anchorX: -9,
-        anchorY: -44,
+        anchorX: -8,
+        anchorY: -38,
       },
-      ...(isSelected
-        ? {
-            callout: {
-              content: `${index + 1}. ${eventLocationLabel(event)}`,
-              color: '#281330',
-              fontSize: 12,
-              borderRadius: 8,
-              bgColor: '#ffffff',
-              padding: 8,
-              display: 'ALWAYS' as const,
-            },
-          }
-        : {}),
     }
   })
 
@@ -169,7 +175,7 @@ export const buildTripMapData = (
       ? [{
           points: includePoints,
           color: '#e040a0',
-          width: 5,
+          width: 4,
           dottedLine: false,
           arrowLine: true,
         }]

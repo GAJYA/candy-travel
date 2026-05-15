@@ -251,14 +251,14 @@
           <view
             class="map-focus-tab"
             :class="{ 'map-focus-tab--active': tripMapData.focusMode === 'destination' }"
-            @click="tripMapFocusMode = 'destination'"
+            @click="setTripMapFocusMode('destination')"
           >
             <text>目的地路线</text>
           </view>
           <view
             class="map-focus-tab"
             :class="{ 'map-focus-tab--active': tripMapData.focusMode === 'all' }"
-            @click="tripMapFocusMode = 'all'"
+            @click="setTripMapFocusMode('all')"
           >
             <text>全部路线</text>
           </view>
@@ -278,16 +278,66 @@
           <text class="empty-events__title">还没有可上地图的地点</text>
           <text class="empty-events__hint">添加事件后，用地图选择地点即可生成路线</text>
         </view>
-        <text v-if="tripMapData.hasDestinationFocus && tripMapData.focusMode === 'destination'" class="map-focus-hint">
-          已隐藏长距离出发段，切到全部路线可查看完整连线
-        </text>
+        <view v-if="tripMapData.mappableEvents.length" class="map-route-summary">
+          <view class="map-route-summary__copy">
+            <text class="map-route-summary__title">{{ tripMapData.mappableEvents.length }} 个地图地点</text>
+            <text
+              v-if="tripMapData.hasDestinationFocus && tripMapData.focusMode === 'destination'"
+              class="map-focus-hint"
+            >
+              已隐藏长距离出发/返程段
+            </text>
+          </view>
+          <button class="map-route-toggle" @click="showTripMapStops = !showTripMapStops">
+            {{ showTripMapStops ? '收起列表' : '展开列表' }}
+          </button>
+        </view>
 
-        <view v-if="tripMapData.mappableEvents.length" class="map-route-list">
+        <scroll-view
+          v-if="tripMapData.mappableEvents.length"
+          class="map-stop-strip"
+          scroll-x
+          :show-scrollbar="false"
+        >
+          <view class="map-stop-strip__inner">
+            <view
+              v-for="(event, index) in tripMapData.mappableEvents"
+              :key="event.id"
+              class="map-stop-chip"
+              :class="{ 'map-stop-chip--active': selectedTripMapEvent?.id === event.id }"
+              @click="onSelectMapRouteEvent(event)"
+            >
+              <text class="map-stop-chip__index">{{ index + 1 }}</text>
+              <text class="map-stop-chip__title">{{ event.locationName || event.title }}</text>
+            </view>
+          </view>
+        </scroll-view>
+
+        <view
+          v-if="selectedTripMapEvent"
+          class="map-route-selected"
+        >
+          <text class="map-route-index map-route-index--selected">{{ selectedTripMapEventIndex + 1 }}</text>
+          <view class="map-route-copy">
+            <text class="map-route-title">{{ selectedTripMapEvent.locationName || selectedTripMapEvent.title }}</text>
+            <text class="map-route-meta">{{ eventTimeRange(selectedTripMapEvent) }} · {{ selectedTripMapEvent.title }}</text>
+          </view>
+          <button
+            v-if="canEditEvent(selectedTripMapEvent)"
+            class="mini-action mini-action--secondary map-coordinate-action"
+            :disabled="locationSavingEventId === selectedTripMapEvent.id"
+            @click.stop="onClearEventCoordinates(selectedTripMapEvent)"
+          >
+            {{ locationSavingEventId === selectedTripMapEvent.id ? '处理中' : '移除坐标' }}
+          </button>
+        </view>
+
+        <view v-if="showTripMapStops" class="map-route-list">
           <view
             v-for="(event, index) in tripMapData.mappableEvents"
             :key="event.id"
             class="map-route-row"
-            :class="{ 'map-route-row--active': selectedTripMapEventId === event.id }"
+            :class="{ 'map-route-row--active': selectedTripMapEvent?.id === event.id }"
             @click="onSelectMapRouteEvent(event)"
           >
             <text class="map-route-index">{{ index + 1 }}</text>
@@ -295,14 +345,6 @@
               <text class="map-route-title">{{ event.locationName || event.title }}</text>
               <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
             </view>
-            <button
-              v-if="canEditEvent(event)"
-              class="mini-action mini-action--secondary map-coordinate-action"
-              :disabled="locationSavingEventId === event.id"
-              @click.stop="onClearEventCoordinates(event)"
-            >
-              {{ locationSavingEventId === event.id ? '处理中' : '移除坐标' }}
-            </button>
           </view>
         </view>
 
@@ -759,6 +801,7 @@ const tripEvents = ref<TripEvent[]>([])
 const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
 const tripMapFocusMode = ref<TripMapFocusMode>('destination')
 const selectedTripMapEventId = ref<string>('')
+const showTripMapStops = ref(false)
 const members = ref<TripMember[]>([])
 const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
@@ -926,6 +969,18 @@ const tripMapData = computed(() => (
     selectedEventId: selectedTripMapEventId.value,
   })
 ))
+
+const selectedTripMapEvent = computed(() => {
+  const mappableEvents = tripMapData.value.mappableEvents
+  return mappableEvents.find((event) => event.id === selectedTripMapEventId.value)
+    || mappableEvents[0]
+    || null
+})
+
+const selectedTripMapEventIndex = computed(() => {
+  if (!selectedTripMapEvent.value) return -1
+  return tripMapData.value.mappableEvents.findIndex((event) => event.id === selectedTripMapEvent.value?.id)
+})
 
 const eventLocationStatusLabel = computed(() => (
   hasEventCoordinates(eventForm)
@@ -1175,6 +1230,11 @@ const eventTimeRange = (event: TripEvent) => {
 
 const canDeleteEvent = (event: TripEvent) => Boolean(event.meta?.icon) || ['activity', 'reminder'].includes(event.eventType)
 const canEditEvent = canDeleteEvent
+
+const setTripMapFocusMode = (mode: TripMapFocusMode) => {
+  tripMapFocusMode.value = mode
+  selectedTripMapEventId.value = ''
+}
 
 const onSelectMapRouteEvent = (event: TripEvent) => {
   selectedTripMapEventId.value = event.id
@@ -2727,7 +2787,7 @@ const onAddSubmit = async () => {
 .map-panel {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+  gap: 16rpx;
   padding: 18rpx;
 }
 .map-focus-tabs {
@@ -2755,17 +2815,109 @@ const onAddSubmit = async () => {
 }
 .map-focus-hint {
   color: $candy-on-surface-variant;
-  font-size: $candy-font-label-md;
+  font-size: 22rpx;
   line-height: 1.45;
 }
 .route-map {
   width: 100%;
-  height: 520rpx;
+  height: 560rpx;
   border-radius: $candy-radius-md;
   overflow: hidden;
 }
 .map-empty {
   min-height: 360rpx;
+}
+.map-route-summary {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 0 4rpx;
+}
+.map-route-summary__copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+.map-route-summary__title {
+  color: $candy-on-surface;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.map-route-toggle {
+  flex: 0 0 auto;
+  height: 52rpx;
+  line-height: 52rpx;
+  padding: 0 22rpx;
+  border-radius: $candy-radius-full;
+  background: $candy-surface-container-low;
+  color: $candy-primary;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.map-route-toggle::after {
+  border: 0;
+}
+.map-stop-strip {
+  width: 100%;
+  white-space: nowrap;
+}
+.map-stop-strip__inner {
+  display: flex;
+  flex-direction: row;
+  gap: 10rpx;
+  padding: 2rpx 0;
+}
+.map-stop-chip {
+  flex: 0 0 auto;
+  max-width: 248rpx;
+  height: 58rpx;
+  border-radius: $candy-radius-full;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+  padding: 0 16rpx 0 8rpx;
+  background: $candy-surface-container-lowest;
+  color: $candy-on-surface-variant;
+}
+.map-stop-chip--active {
+  background: $candy-primary-fixed;
+  color: $candy-primary;
+}
+.map-stop-chip__index {
+  flex: 0 0 38rpx;
+  width: 38rpx;
+  height: 38rpx;
+  line-height: 38rpx;
+  border-radius: 50%;
+  text-align: center;
+  background: $candy-primary;
+  color: $candy-on-primary;
+  font-size: 20rpx;
+  font-weight: 900;
+}
+.map-stop-chip__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.map-route-selected {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14rpx;
+  padding: 16rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-primary-fixed;
 }
 .map-route-list,
 .map-missing {
@@ -2780,7 +2932,7 @@ const onAddSubmit = async () => {
   flex-direction: row;
   align-items: center;
   gap: 14rpx;
-  padding: 14rpx;
+  padding: 12rpx 14rpx;
   border-radius: $candy-radius-md;
   background: $candy-surface-container-lowest;
 }
@@ -2807,6 +2959,13 @@ const onAddSubmit = async () => {
   color: $candy-on-primary;
   font-size: 22rpx;
   font-weight: 900;
+}
+.map-route-index--selected {
+  flex-basis: 52rpx;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  font-size: 24rpx;
 }
 .map-route-copy,
 .map-missing-copy {
