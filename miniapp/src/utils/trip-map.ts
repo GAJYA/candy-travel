@@ -8,6 +8,7 @@ export interface TripMapPoint {
 export interface TripMapMarker extends TripMapPoint {
   id: number
   title: string
+  iconPath: string
   width: number
   height: number
   alpha: number
@@ -50,6 +51,7 @@ export interface TripMapData {
   polyline: TripMapPolyline[]
   includePoints: TripMapPoint[]
   center: TripMapPoint
+  scale: number
   focusMode: TripMapFocusMode
   hasDestinationFocus: boolean
 }
@@ -142,17 +144,21 @@ export const buildTripMapData = (
   const mappableEvents = focusMode === 'destination'
     ? allMappableEvents.slice(startIndex, endIndex)
     : allMappableEvents
-  const includePoints = mappableEvents.map(toMapPoint)
+  const routePoints = mappableEvents.map(toMapPoint)
+  const selectedEvent = mappableEvents.find((event) => event.id === options.selectedEventId)
+  const selectedPoint = selectedEvent ? toMapPoint(selectedEvent) : null
+  const includePoints = selectedPoint ? [selectedPoint] : routePoints
   const markers = mappableEvents.map((event, index) => {
-    const isSelected = event.id === options.selectedEventId
+    const isSelected = event.id === selectedEvent?.id
     return {
       id: index + 1,
       latitude: event.latitude as number,
       longitude: event.longitude as number,
       title: eventLocationLabel(event),
-      width: isSelected ? 28 : 22,
-      height: isSelected ? 34 : 28,
-      alpha: isSelected ? 1 : 0.72,
+      iconPath: '/static/logo.png',
+      width: 1,
+      height: 1,
+      alpha: 1,
       label: {
         content: String(index + 1),
         color: '#ffffff',
@@ -161,8 +167,8 @@ export const buildTripMapData = (
         bgColor: isSelected ? '#7b4ab0' : '#e040a0',
         padding: isSelected ? 6 : 4,
         textAlign: 'center' as const,
-        anchorX: -8,
-        anchorY: -38,
+        anchorX: isSelected ? -13 : -11,
+        anchorY: isSelected ? -13 : -11,
       },
     }
   })
@@ -171,9 +177,9 @@ export const buildTripMapData = (
     mappableEvents,
     missingLocationEvents,
     markers,
-    polyline: includePoints.length >= 2
+    polyline: routePoints.length >= 2
       ? [{
-          points: includePoints,
+          points: routePoints,
           color: '#e040a0',
           width: 4,
           dottedLine: false,
@@ -181,7 +187,8 @@ export const buildTripMapData = (
         }]
       : [],
     includePoints,
-    center: includePoints[0] || DEFAULT_CENTER,
+    center: selectedPoint || routePoints[0] || DEFAULT_CENTER,
+    scale: selectedPoint ? 15 : 12,
     focusMode,
     hasDestinationFocus,
   }

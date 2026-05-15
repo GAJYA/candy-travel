@@ -53,3 +53,20 @@ test('destination focus hides both long-distance arrival and return endpoints', 
   )
   assert.equal(data.hasDestinationFocus, true)
 })
+
+test('selected map event becomes the viewport center', () => {
+  const data = buildTripMapData([
+    tripEvent('yangzhou-1', '张阿姨炸串', 32.38262, 119.42051, 1),
+    tripEvent('yangzhou-2', '瘦西湖', 32.41599, 119.42771, 2),
+    tripEvent('yangzhou-3', '扬州东站', 32.39824, 119.51513, 3),
+  ], { selectedEventId: 'yangzhou-2' })
+
+  assert.equal(data.center.latitude, 32.41599)
+  assert.equal(data.center.longitude, 119.42771)
+  assert.deepEqual(
+    Array.from(data.includePoints, (point) => [point.latitude, point.longitude]),
+    [[32.41599, 119.42771]],
+  )
+  assert.equal(data.scale, 15)
+  assert.equal(data.markers[1].iconPath, '/static/logo.png')
+})

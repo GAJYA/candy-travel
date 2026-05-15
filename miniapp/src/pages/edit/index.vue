@@ -271,6 +271,7 @@
           :markers="tripMapData.markers"
           :polyline="tripMapData.polyline"
           :include-points="tripMapData.includePoints"
+          :scale="tripMapData.scale"
           :show-location="false"
           @markertap="onTripMapMarkerTap"
         />
@@ -278,18 +279,50 @@
           <text class="empty-events__title">还没有可上地图的地点</text>
           <text class="empty-events__hint">添加事件后，用地图选择地点即可生成路线</text>
         </view>
-        <view v-if="tripMapData.mappableEvents.length" class="map-route-summary">
-          <view class="map-route-summary__copy">
-            <text class="map-route-summary__title">{{ tripMapData.mappableEvents.length }} 个地图地点</text>
-            <text
-              v-if="tripMapData.hasDestinationFocus && tripMapData.focusMode === 'destination'"
-              class="map-focus-hint"
-            >
-              已隐藏长距离出发/返程段
+        <view v-if="tripMapData.mappableEvents.length" class="map-route-selected">
+          <text
+            v-if="selectedTripMapEvent"
+            class="map-route-index map-route-index--selected"
+          >
+            {{ selectedTripMapEventIndex + 1 }}
+          </text>
+          <view v-else class="map-route-overview-icon">
+            <CandyIcon name="pin" />
+          </view>
+          <view class="map-route-copy">
+            <text class="map-route-eyebrow">
+              {{ selectedTripMapEvent ? `当前地点 · ${selectedTripMapEventIndex + 1}/${tripMapData.mappableEvents.length}` : `路线总览 · ${tripMapData.mappableEvents.length} 个地点` }}
+            </text>
+            <text class="map-route-title">
+              {{ selectedTripMapEvent ? (selectedTripMapEvent.locationName || selectedTripMapEvent.title) : '点选地点后，地图会居中查看' }}
+            </text>
+            <text class="map-route-meta">
+              {{ selectedTripMapEvent ? `${eventTimeRange(selectedTripMapEvent)} · ${selectedTripMapEvent.title}` : (tripMapData.hasDestinationFocus && tripMapData.focusMode === 'destination' ? '已隐藏长距离出发/返程段' : '当前显示完整路线') }}
             </text>
           </view>
-          <button class="map-route-toggle" @click="showTripMapStops = !showTripMapStops">
-            {{ showTripMapStops ? '收起列表' : '展开列表' }}
+          <view class="map-route-actions">
+            <button
+              v-if="selectedTripMapEvent"
+              class="map-route-ghost-action"
+              @click="clearTripMapSelection"
+            >
+              总览
+            </button>
+            <button class="map-route-toggle" @click="showTripMapStops = !showTripMapStops">
+              {{ showTripMapStops ? '收起' : '列表' }}
+            </button>
+          </view>
+        </view>
+        <view
+          v-if="selectedTripMapEvent && canEditEvent(selectedTripMapEvent)"
+          class="map-route-secondary-actions"
+        >
+          <button
+            class="map-coordinate-action"
+            :disabled="locationSavingEventId === selectedTripMapEvent.id"
+            @click.stop="onClearEventCoordinates(selectedTripMapEvent)"
+          >
+            {{ locationSavingEventId === selectedTripMapEvent.id ? '处理中' : '移除该地点坐标' }}
           </button>
         </view>
 
@@ -312,25 +345,6 @@
             </view>
           </view>
         </scroll-view>
-
-        <view
-          v-if="selectedTripMapEvent"
-          class="map-route-selected"
-        >
-          <text class="map-route-index map-route-index--selected">{{ selectedTripMapEventIndex + 1 }}</text>
-          <view class="map-route-copy">
-            <text class="map-route-title">{{ selectedTripMapEvent.locationName || selectedTripMapEvent.title }}</text>
-            <text class="map-route-meta">{{ eventTimeRange(selectedTripMapEvent) }} · {{ selectedTripMapEvent.title }}</text>
-          </view>
-          <button
-            v-if="canEditEvent(selectedTripMapEvent)"
-            class="mini-action mini-action--secondary map-coordinate-action"
-            :disabled="locationSavingEventId === selectedTripMapEvent.id"
-            @click.stop="onClearEventCoordinates(selectedTripMapEvent)"
-          >
-            {{ locationSavingEventId === selectedTripMapEvent.id ? '处理中' : '移除坐标' }}
-          </button>
-        </view>
 
         <view v-if="showTripMapStops" class="map-route-list">
           <view
@@ -972,9 +986,7 @@ const tripMapData = computed(() => (
 
 const selectedTripMapEvent = computed(() => {
   const mappableEvents = tripMapData.value.mappableEvents
-  return mappableEvents.find((event) => event.id === selectedTripMapEventId.value)
-    || mappableEvents[0]
-    || null
+  return mappableEvents.find((event) => event.id === selectedTripMapEventId.value) || null
 })
 
 const selectedTripMapEventIndex = computed(() => {
@@ -1233,6 +1245,10 @@ const canEditEvent = canDeleteEvent
 
 const setTripMapFocusMode = (mode: TripMapFocusMode) => {
   tripMapFocusMode.value = mode
+  selectedTripMapEventId.value = ''
+}
+
+const clearTripMapSelection = () => {
   selectedTripMapEventId.value = ''
 }
 
@@ -2827,39 +2843,33 @@ const onAddSubmit = async () => {
 .map-empty {
   min-height: 360rpx;
 }
-.map-route-summary {
-  min-width: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  padding: 0 4rpx;
-}
-.map-route-summary__copy {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2rpx;
-}
-.map-route-summary__title {
-  color: $candy-on-surface;
-  font-size: $candy-font-label-md;
-  font-weight: 800;
-}
 .map-route-toggle {
-  flex: 0 0 auto;
-  height: 52rpx;
-  line-height: 52rpx;
-  padding: 0 22rpx;
+  margin: 0;
+  min-width: 92rpx;
+  height: 46rpx;
+  line-height: 46rpx;
+  padding: 0 18rpx;
   border-radius: $candy-radius-full;
-  background: $candy-surface-container-low;
-  color: $candy-primary;
-  font-size: $candy-font-label-md;
+  background: $candy-primary;
+  color: $candy-on-primary;
+  font-size: 22rpx;
   font-weight: 800;
 }
-.map-route-toggle::after {
+.map-route-ghost-action {
+  margin: 0;
+  min-width: 92rpx;
+  height: 46rpx;
+  line-height: 46rpx;
+  padding: 0 18rpx;
+  border-radius: $candy-radius-full;
+  background: $candy-surface-container-lowest;
+  color: $candy-primary;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+.map-route-toggle::after,
+.map-route-ghost-action::after,
+.map-coordinate-action::after {
   border: 0;
 }
 .map-stop-strip {
@@ -2874,8 +2884,8 @@ const onAddSubmit = async () => {
 }
 .map-stop-chip {
   flex: 0 0 auto;
-  max-width: 248rpx;
-  height: 58rpx;
+  max-width: 220rpx;
+  height: 52rpx;
   border-radius: $candy-radius-full;
   display: flex;
   flex-direction: row;
@@ -2890,10 +2900,10 @@ const onAddSubmit = async () => {
   color: $candy-primary;
 }
 .map-stop-chip__index {
-  flex: 0 0 38rpx;
-  width: 38rpx;
-  height: 38rpx;
-  line-height: 38rpx;
+  flex: 0 0 34rpx;
+  width: 34rpx;
+  height: 34rpx;
+  line-height: 34rpx;
   border-radius: 50%;
   text-align: center;
   background: $candy-primary;
@@ -2913,11 +2923,34 @@ const onAddSubmit = async () => {
   min-width: 0;
   display: flex;
   flex-direction: row;
-  align-items: center;
-  gap: 14rpx;
-  padding: 16rpx;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 18rpx;
   border-radius: $candy-radius-md;
   background: $candy-primary-fixed;
+}
+.map-route-overview-icon {
+  flex: 0 0 52rpx;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $candy-primary;
+  color: $candy-on-primary;
+  font-size: 28rpx;
+}
+.map-route-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.map-route-secondary-actions {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
 }
 .map-route-list,
 .map-missing {
@@ -2944,9 +2977,15 @@ const onAddSubmit = async () => {
   color: $candy-primary;
 }
 .map-coordinate-action {
-  flex: 0 0 132rpx;
-  min-width: 132rpx;
-  padding: 0 14rpx;
+  margin: 0;
+  height: 48rpx;
+  line-height: 48rpx;
+  padding: 0 20rpx;
+  border-radius: $candy-radius-full;
+  background: rgba(186, 26, 26, 0.08);
+  color: #ba1a1a;
+  font-size: 22rpx;
+  font-weight: 800;
 }
 .map-route-index {
   flex: 0 0 46rpx;
@@ -2974,6 +3013,11 @@ const onAddSubmit = async () => {
   display: flex;
   flex-direction: column;
   gap: 4rpx;
+}
+.map-route-eyebrow {
+  color: $candy-primary;
+  font-size: 20rpx;
+  font-weight: 900;
 }
 .map-route-title,
 .map-missing-title {
