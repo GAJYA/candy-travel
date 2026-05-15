@@ -70,6 +70,7 @@ test('map coordinate removal is hidden behind row swipe actions', () => {
 
 test('revealed swipe row removes the foreground right corner seam', () => {
   const revealedRow = styleBlock('.map-route-swipe-row--revealed .map-route-row')
+  const rowAction = styleBlock('.map-route-row-action')
 
   assert.match(
     revealedRow,
@@ -80,6 +81,16 @@ test('revealed swipe row removes the foreground right corner seam', () => {
     revealedRow,
     /border-bottom-right-radius:\s*0\s*;/,
     'revealed foreground row should not show a rounded bottom-right seam',
+  )
+  assert.match(
+    rowAction,
+    /border-radius:\s*\$candy-radius-full\s*;/,
+    'swipe action should look like a compact capsule, not a harsh red block',
+  )
+  assert.match(
+    rowAction,
+    /background:\s*rgba\(186,\s*26,\s*26,\s*0\.1\)\s*;/,
+    'swipe action should use a softer danger treatment',
   )
 })
 

@@ -769,7 +769,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { onBackPress, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 
 import CandyIcon from '../../components/CandyIcon.vue'
@@ -1240,7 +1240,8 @@ const eventTimeRange = (event: TripEvent) => {
 const canDeleteEvent = (event: TripEvent) => Boolean(event.meta?.icon) || ['activity', 'reminder'].includes(event.eventType)
 const canEditEvent = canDeleteEvent
 
-const refreshTripMapViewport = () => {
+const refreshTripMapViewport = async () => {
+  await nextTick()
   tripMapViewportKey.value += 1
 }
 
@@ -1248,19 +1249,19 @@ const setTripMapFocusMode = (mode: TripMapFocusMode) => {
   tripMapFocusMode.value = mode
   selectedTripMapEventId.value = ''
   swipedMapRouteEventId.value = ''
-  refreshTripMapViewport()
+  void refreshTripMapViewport()
 }
 
 const clearTripMapSelection = () => {
   selectedTripMapEventId.value = ''
   swipedMapRouteEventId.value = ''
-  refreshTripMapViewport()
+  void refreshTripMapViewport()
 }
 
 const onSelectMapRouteEvent = (event: TripEvent) => {
   selectedTripMapEventId.value = event.id
   swipedMapRouteEventId.value = ''
-  refreshTripMapViewport()
+  void refreshTripMapViewport()
 }
 
 const getTouchPoint = (e: any) => {
@@ -2992,34 +2993,34 @@ const onAddSubmit = async () => {
   min-width: 0;
   overflow: hidden;
   border-radius: $candy-radius-md;
-  background: rgba(186, 26, 26, 0.08);
+  background: $candy-surface-container-lowest;
 }
 .map-route-row-actions {
   position: absolute;
   top: 0;
   right: 0;
   bottom: 0;
-  width: 164rpx;
+  width: 168rpx;
+  padding: 8rpx 10rpx;
+  box-sizing: border-box;
   display: flex;
   align-items: stretch;
-  justify-content: flex-end;
+  justify-content: center;
 }
 .map-route-row-action {
   margin: 0;
-  width: 164rpx;
+  width: 148rpx;
   height: 100%;
   line-height: 1.2;
-  padding: 0 18rpx;
-  border-radius: 0;
+  padding: 0 14rpx;
+  border-radius: $candy-radius-full;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ba1a1a;
-  color: #ffffff;
+  background: rgba(186, 26, 26, 0.1);
+  color: #ba1a1a;
   font-size: 22rpx;
   font-weight: 800;
-  border-top-right-radius: $candy-radius-md;
-  border-bottom-right-radius: $candy-radius-md;
 }
 .map-route-row-action[disabled] {
   background: #ecd2e6;
@@ -3042,7 +3043,7 @@ const onAddSubmit = async () => {
   transition: transform 0.18s ease;
 }
 .map-route-swipe-row--revealed .map-route-row {
-  transform: translateX(-164rpx);
+  transform: translateX(-168rpx);
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }

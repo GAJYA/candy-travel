@@ -147,7 +147,7 @@ export const buildTripMapData = (
   const routePoints = mappableEvents.map(toMapPoint)
   const selectedEvent = mappableEvents.find((event) => event.id === options.selectedEventId)
   const selectedPoint = selectedEvent ? toMapPoint(selectedEvent) : null
-  const includePoints = selectedPoint ? [selectedPoint] : routePoints
+  const includePoints = selectedPoint ? [] : routePoints
   const markers = mappableEvents.map((event, index) => {
     const isSelected = event.id === selectedEvent?.id
     return {

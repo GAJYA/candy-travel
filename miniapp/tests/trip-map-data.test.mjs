@@ -63,10 +63,7 @@ test('selected map event becomes the viewport center', () => {
 
   assert.equal(data.center.latitude, 32.41599)
   assert.equal(data.center.longitude, 119.42771)
-  assert.deepEqual(
-    Array.from(data.includePoints, (point) => [point.latitude, point.longitude]),
-    [[32.41599, 119.42771]],
-  )
+  assert.deepEqual(Array.from(data.includePoints), [])
   assert.equal(data.scale, 15)
   assert.equal(data.markers[1].iconPath, '/static/logo.png')
 })
