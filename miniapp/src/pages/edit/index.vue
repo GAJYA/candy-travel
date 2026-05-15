@@ -272,6 +272,7 @@
           :polyline="tripMapData.polyline"
           :include-points="tripMapData.includePoints"
           :show-location="false"
+          @markertap="onTripMapMarkerTap"
         />
         <view v-else class="empty-events map-empty">
           <text class="empty-events__title">还没有可上地图的地点</text>
@@ -286,6 +287,8 @@
             v-for="(event, index) in tripMapData.mappableEvents"
             :key="event.id"
             class="map-route-row"
+            :class="{ 'map-route-row--active': selectedTripMapEventId === event.id }"
+            @click="onSelectMapRouteEvent(event)"
           >
             <text class="map-route-index">{{ index + 1 }}</text>
             <view class="map-route-copy">
@@ -296,7 +299,7 @@
               v-if="canEditEvent(event)"
               class="mini-action mini-action--secondary map-coordinate-action"
               :disabled="locationSavingEventId === event.id"
-              @click="onClearEventCoordinates(event)"
+              @click.stop="onClearEventCoordinates(event)"
             >
               {{ locationSavingEventId === event.id ? '处理中' : '移除坐标' }}
             </button>
@@ -755,6 +758,7 @@ const checklistItems = ref<ChecklistItem[]>([])
 const tripEvents = ref<TripEvent[]>([])
 const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
 const tripMapFocusMode = ref<TripMapFocusMode>('destination')
+const selectedTripMapEventId = ref<string>('')
 const members = ref<TripMember[]>([])
 const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
@@ -917,7 +921,10 @@ const eventGroups = computed(() => {
 })
 
 const tripMapData = computed(() => (
-  buildTripMapData(tripEvents.value, { focusMode: tripMapFocusMode.value })
+  buildTripMapData(tripEvents.value, {
+    focusMode: tripMapFocusMode.value,
+    selectedEventId: selectedTripMapEventId.value,
+  })
 ))
 
 const eventLocationStatusLabel = computed(() => (
@@ -1168,6 +1175,17 @@ const eventTimeRange = (event: TripEvent) => {
 
 const canDeleteEvent = (event: TripEvent) => Boolean(event.meta?.icon) || ['activity', 'reminder'].includes(event.eventType)
 const canEditEvent = canDeleteEvent
+
+const onSelectMapRouteEvent = (event: TripEvent) => {
+  selectedTripMapEventId.value = event.id
+}
+
+const onTripMapMarkerTap = (e: any) => {
+  const markerId = Number(e?.detail?.markerId)
+  if (!Number.isFinite(markerId)) return
+  const event = tripMapData.value.mappableEvents[markerId - 1]
+  if (event) selectedTripMapEventId.value = event.id
+}
 
 const onDepartDateChange = (e: any) => {
   form.departDate = e.detail.value
@@ -2765,6 +2783,13 @@ const onAddSubmit = async () => {
   padding: 14rpx;
   border-radius: $candy-radius-md;
   background: $candy-surface-container-lowest;
+}
+.map-route-row--active {
+  background: $candy-primary-fixed;
+  box-shadow: 0 8rpx 22rpx rgba(224, 64, 160, 0.12);
+}
+.map-route-row--active .map-route-title {
+  color: $candy-primary;
 }
 .map-coordinate-action {
   flex: 0 0 132rpx;

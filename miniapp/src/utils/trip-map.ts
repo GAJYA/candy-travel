@@ -8,7 +8,18 @@ export interface TripMapPoint {
 export interface TripMapMarker extends TripMapPoint {
   id: number
   title: string
-  callout: {
+  label: {
+    content: string
+    color: string
+    fontSize: number
+    borderRadius: number
+    bgColor: string
+    padding: number
+    textAlign: 'center'
+    anchorX: number
+    anchorY: number
+  }
+  callout?: {
     content: string
     color: string
     fontSize: number
@@ -102,7 +113,7 @@ const destinationStartIndex = (events: TripEvent[]) => {
 
 export const buildTripMapData = (
   events: TripEvent[],
-  options: { focusMode?: TripMapFocusMode } = {},
+  options: { focusMode?: TripMapFocusMode; selectedEventId?: string } = {},
 ): TripMapData => {
   const sorted = sortTripEventsForMap(events)
   const allMappableEvents = sorted.filter(hasEventCoordinates)
@@ -116,21 +127,39 @@ export const buildTripMapData = (
     ? allMappableEvents.slice(startIndex)
     : allMappableEvents
   const includePoints = mappableEvents.map(toMapPoint)
-  const markers = mappableEvents.map((event, index) => ({
-    id: index + 1,
-    latitude: event.latitude as number,
-    longitude: event.longitude as number,
-    title: eventLocationLabel(event),
-    callout: {
-      content: `${index + 1}. ${eventLocationLabel(event)}`,
-      color: '#281330',
-      fontSize: 12,
-      borderRadius: 8,
-      bgColor: '#ffffff',
-      padding: 8,
-      display: 'ALWAYS' as const,
-    },
-  }))
+  const markers = mappableEvents.map((event, index) => {
+    const isSelected = event.id === options.selectedEventId
+    return {
+      id: index + 1,
+      latitude: event.latitude as number,
+      longitude: event.longitude as number,
+      title: eventLocationLabel(event),
+      label: {
+        content: String(index + 1),
+        color: '#ffffff',
+        fontSize: 13,
+        borderRadius: 14,
+        bgColor: isSelected ? '#7b4ab0' : '#e040a0',
+        padding: 6,
+        textAlign: 'center' as const,
+        anchorX: -9,
+        anchorY: -44,
+      },
+      ...(isSelected
+        ? {
+            callout: {
+              content: `${index + 1}. ${eventLocationLabel(event)}`,
+              color: '#281330',
+              fontSize: 12,
+              borderRadius: 8,
+              bgColor: '#ffffff',
+              padding: 8,
+              display: 'ALWAYS' as const,
+            },
+          }
+        : {}),
+    }
+  })
 
   return {
     mappableEvents,
