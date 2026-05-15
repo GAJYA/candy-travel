@@ -309,19 +309,6 @@
             </button>
           </view>
         </view>
-        <view
-          v-if="selectedTripMapEvent && canEditEvent(selectedTripMapEvent)"
-          class="map-route-secondary-actions"
-        >
-          <button
-            class="map-coordinate-action"
-            :disabled="locationSavingEventId === selectedTripMapEvent.id"
-            @click.stop="onClearEventCoordinates(selectedTripMapEvent)"
-          >
-            {{ locationSavingEventId === selectedTripMapEvent.id ? '处理中' : '移除该地点坐标' }}
-          </button>
-        </view>
-
         <scroll-view
           v-if="tripMapData.mappableEvents.length || tripMapData.missingLocationEvents.length"
           class="map-route-list-scroll"
@@ -332,14 +319,32 @@
             <view
               v-for="(event, index) in tripMapData.mappableEvents"
               :key="event.id"
-              class="map-route-row"
-              :class="{ 'map-route-row--active': selectedTripMapEvent?.id === event.id }"
-              @click="onSelectMapRouteEvent(event)"
+              class="map-route-swipe-row"
+              :class="{ 'map-route-swipe-row--revealed': swipedMapRouteEventId === event.id }"
             >
-              <text class="map-route-index">{{ index + 1 }}</text>
-              <view class="map-route-copy">
-                <text class="map-route-title">{{ event.locationName || event.title }}</text>
-                <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
+              <view v-if="canEditEvent(event)" class="map-route-row-actions">
+                <button
+                  class="map-route-row-action"
+                  :disabled="locationSavingEventId === event.id"
+                  @click.stop="onClearMapRouteCoordinates(event)"
+                >
+                  {{ locationSavingEventId === event.id ? '处理中' : '移除坐标' }}
+                </button>
+              </view>
+              <view
+                class="map-route-row"
+                :class="{ 'map-route-row--active': selectedTripMapEvent?.id === event.id }"
+                @touchstart="onMapRouteTouchStart(event, $event)"
+                @touchmove="onMapRouteTouchMove(event, $event)"
+                @touchend="onMapRouteTouchEnd(event, $event)"
+                @touchcancel="onMapRouteTouchCancel"
+                @click="onMapRouteRowClick(event)"
+              >
+                <text class="map-route-index">{{ index + 1 }}</text>
+                <view class="map-route-copy">
+                  <text class="map-route-title">{{ event.locationName || event.title }}</text>
+                  <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
+                </view>
               </view>
             </view>
           </view>
@@ -798,6 +803,14 @@ const tripEvents = ref<TripEvent[]>([])
 const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
 const tripMapFocusMode = ref<TripMapFocusMode>('destination')
 const selectedTripMapEventId = ref<string>('')
+const swipedMapRouteEventId = ref<string>('')
+const mapRouteSwipeStart = reactive({
+  eventId: '',
+  x: 0,
+  y: 0,
+  lock: '' as '' | 'horizontal' | 'vertical',
+})
+const suppressNextMapRouteTap = ref(false)
 const members = ref<TripMember[]>([])
 const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
@@ -1232,10 +1245,75 @@ const setTripMapFocusMode = (mode: TripMapFocusMode) => {
 
 const clearTripMapSelection = () => {
   selectedTripMapEventId.value = ''
+  swipedMapRouteEventId.value = ''
 }
 
 const onSelectMapRouteEvent = (event: TripEvent) => {
   selectedTripMapEventId.value = event.id
+  swipedMapRouteEventId.value = ''
+}
+
+const getTouchPoint = (e: any) => {
+  const touch = e?.touches?.[0] || e?.changedTouches?.[0]
+  if (!touch) return null
+  return {
+    x: Number(touch.clientX || 0),
+    y: Number(touch.clientY || 0),
+  }
+}
+
+const resetMapRouteSwipe = () => {
+  mapRouteSwipeStart.eventId = ''
+  mapRouteSwipeStart.x = 0
+  mapRouteSwipeStart.y = 0
+  mapRouteSwipeStart.lock = ''
+}
+
+const onMapRouteTouchStart = (event: TripEvent, e: any) => {
+  if (!canEditEvent(event)) return
+  const touch = getTouchPoint(e)
+  if (!touch) return
+  mapRouteSwipeStart.eventId = event.id
+  mapRouteSwipeStart.x = touch.x
+  mapRouteSwipeStart.y = touch.y
+  mapRouteSwipeStart.lock = ''
+}
+
+const onMapRouteTouchMove = (event: TripEvent, e: any) => {
+  if (mapRouteSwipeStart.eventId !== event.id) return
+  const touch = getTouchPoint(e)
+  if (!touch) return
+  const diffX = touch.x - mapRouteSwipeStart.x
+  const diffY = touch.y - mapRouteSwipeStart.y
+  if (!mapRouteSwipeStart.lock && (Math.abs(diffX) > 8 || Math.abs(diffY) > 8)) {
+    mapRouteSwipeStart.lock = Math.abs(diffX) > Math.abs(diffY) ? 'horizontal' : 'vertical'
+  }
+  if (mapRouteSwipeStart.lock !== 'horizontal') return
+  if (diffX < -18) swipedMapRouteEventId.value = event.id
+  if (diffX > 18 && swipedMapRouteEventId.value === event.id) swipedMapRouteEventId.value = ''
+}
+
+const onMapRouteTouchEnd = (event: TripEvent, e: any) => {
+  if (mapRouteSwipeStart.eventId !== event.id) return
+  const touch = getTouchPoint(e)
+  const diffX = touch ? touch.x - mapRouteSwipeStart.x : 0
+  if (mapRouteSwipeStart.lock === 'horizontal' && Math.abs(diffX) > 24) {
+    suppressNextMapRouteTap.value = true
+    swipedMapRouteEventId.value = diffX < 0 ? event.id : ''
+  }
+  resetMapRouteSwipe()
+}
+
+const onMapRouteTouchCancel = () => {
+  resetMapRouteSwipe()
+}
+
+const onMapRouteRowClick = (event: TripEvent) => {
+  if (suppressNextMapRouteTap.value) {
+    suppressNextMapRouteTap.value = false
+    return
+  }
+  onSelectMapRouteEvent(event)
 }
 
 const onTripMapMarkerTap = (e: any) => {
@@ -1861,6 +1939,11 @@ const onClearEventCoordinates = (event: TripEvent) => {
       void clearEventCoordinates(event)
     },
   })
+}
+
+const onClearMapRouteCoordinates = (event: TripEvent) => {
+  swipedMapRouteEventId.value = ''
+  onClearEventCoordinates(event)
 }
 
 const onSelectPlaceSuggestion = async (place: PlaceSuggestion) => {
@@ -2838,7 +2921,7 @@ const onAddSubmit = async () => {
   font-weight: 800;
 }
 .map-route-ghost-action::after,
-.map-coordinate-action::after {
+.map-route-row-action::after {
   border: 0;
 }
 .map-route-list-scroll {
@@ -2885,11 +2968,6 @@ const onAddSubmit = async () => {
   flex-direction: column;
   gap: 8rpx;
 }
-.map-route-secondary-actions {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-end;
-}
 .map-missing {
   display: flex;
   flex-direction: column;
@@ -2898,6 +2976,42 @@ const onAddSubmit = async () => {
 }
 .map-route-list + .map-missing {
   padding-top: 0;
+}
+.map-route-swipe-row {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: $candy-radius-md;
+  background: rgba(186, 26, 26, 0.08);
+}
+.map-route-row-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 164rpx;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+.map-route-row-action {
+  margin: 0;
+  width: 164rpx;
+  height: 100%;
+  line-height: 1.2;
+  padding: 0 18rpx;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ba1a1a;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+.map-route-row-action[disabled] {
+  background: #ecd2e6;
+  color: $candy-on-surface-variant;
 }
 .map-route-row,
 .map-missing-row {
@@ -2910,23 +3024,20 @@ const onAddSubmit = async () => {
   border-radius: $candy-radius-md;
   background: $candy-surface-container-lowest;
 }
+.map-route-row {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.18s ease;
+}
+.map-route-swipe-row--revealed .map-route-row {
+  transform: translateX(-164rpx);
+}
 .map-route-row--active {
   background: $candy-primary-fixed;
   box-shadow: 0 8rpx 22rpx rgba(224, 64, 160, 0.12);
 }
 .map-route-row--active .map-route-title {
   color: $candy-primary;
-}
-.map-coordinate-action {
-  margin: 0;
-  height: 48rpx;
-  line-height: 48rpx;
-  padding: 0 20rpx;
-  border-radius: $candy-radius-full;
-  background: rgba(186, 26, 26, 0.08);
-  color: #ba1a1a;
-  font-size: 22rpx;
-  font-weight: 800;
 }
 .map-route-index {
   flex: 0 0 46rpx;

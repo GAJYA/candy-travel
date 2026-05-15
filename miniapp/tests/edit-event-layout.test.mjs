@@ -49,3 +49,21 @@ test('map route list scrolls vertically without a horizontal stop strip', () => 
     'map route list should be directly scrollable instead of hidden behind a toggle',
   )
 })
+
+test('map coordinate removal is hidden behind row swipe actions', () => {
+  assert.match(
+    source,
+    /class="map-route-row-action"/,
+    'coordinate removal should be attached to the route row action area',
+  )
+  assert.match(
+    source,
+    /@touchstart="onMapRouteTouchStart/,
+    'route rows should support horizontal swipe gestures',
+  )
+  assert.doesNotMatch(
+    source,
+    /class="map-coordinate-action"/,
+    'selected map summary should not show a persistent coordinate removal button',
+  )
+})
