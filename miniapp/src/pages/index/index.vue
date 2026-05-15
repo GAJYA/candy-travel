@@ -2,7 +2,7 @@
   <view class="page">
     <view class="topbar">
       <view>
-        <text class="brand">Candy Travel</text>
+        <text class="brand">P人旅行计划</text>
         <text class="subtitle">{{ subtitle }}</text>
       </view>
       <button
@@ -22,7 +22,7 @@
       <view class="login-mark">
         <text>✦</text>
       </view>
-      <text class="login-title">开启你的糖果旅行计划</text>
+      <text class="login-title">开启你的P人旅行计划</text>
       <text class="login-hint">微信登录后开始整理下一段旅程</text>
       <button class="candy-btn candy-btn--primary login-btn" :disabled="auth.loading" @click="login">
         {{ auth.loading ? '登录中...' : '微信登录' }}

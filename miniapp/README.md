@@ -1,4 +1,4 @@
-# CandyTravel Miniapp
+# P人旅行计划 Miniapp
 
 uni-app（Vue 3 + Vite + TS）→ 微信小程序。
 
