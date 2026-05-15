@@ -12,6 +12,8 @@ export interface AiTripEventCandidate {
   endAt: string | null
   locationName: string | null
   address: string | null
+  latitude: number | null
+  longitude: number | null
   note: string | null
   meta: Record<string, unknown>
   confidence: AiEventConfidence
@@ -146,6 +148,8 @@ export const aiImportApi = {
         response.events.map((event, eventIndex) => ({
           ...event,
           clientId: `${event.clientId}-${responseIndex}-${eventIndex}`,
+          latitude: event.latitude ?? null,
+          longitude: event.longitude ?? null,
           sortOrder: event.sortOrder ?? eventIndex,
         }))
       )),

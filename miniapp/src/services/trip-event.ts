@@ -13,6 +13,8 @@ export interface TripEvent {
   endAt: string | null
   locationName: string | null
   address: string | null
+  latitude: number | null
+  longitude: number | null
   note: string | null
   meta: {
     icon?: string
@@ -32,6 +34,8 @@ export interface TripEventCreatePayload {
   endAt?: string | null
   locationName?: string | null
   address?: string | null
+  latitude?: number | null
+  longitude?: number | null
   note?: string | null
   meta?: Record<string, unknown>
   status?: TripEventStatus
@@ -44,6 +48,8 @@ export interface TripEventPatchPayload {
   endAt?: string | null
   locationName?: string | null
   address?: string | null
+  latitude?: number | null
+  longitude?: number | null
   note?: string | null
   meta?: Record<string, unknown>
   status?: TripEventStatus
