@@ -81,8 +81,7 @@ async def test_create_and_list_event_coordinates(client, coordinate_trip_seed):
 
     assert created.status_code == 201
     created_body = created.json()
-    assert created_body["latitude"] == 30.24258
-    assert created_body["longitude"] == 120.15062
+    created_event_id = created_body["id"]
 
     listed = await client.get(
         f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/events",
@@ -90,8 +89,14 @@ async def test_create_and_list_event_coordinates(client, coordinate_trip_seed):
     )
 
     assert listed.status_code == 200
-    assert listed.json()[0]["latitude"] == 30.24258
-    assert listed.json()[0]["longitude"] == 120.15062
+    listed_body = listed.json()
+    assert [event["id"] for event in listed_body] == [created_event_id]
+    listed_event = listed_body[0]
+
+    assert created_body["latitude"] == 30.24258
+    assert created_body["longitude"] == 120.15062
+    assert listed_event["latitude"] == 30.24258
+    assert listed_event["longitude"] == 120.15062
 
 
 @pytest.mark.asyncio
@@ -167,22 +172,22 @@ async def test_patch_coordinates_updates_coordinates(client, coordinate_trip_see
 async def test_rejects_incomplete_or_out_of_range_coordinates(client, coordinate_trip_seed):
     headers = auth_header(coordinate_trip_seed["owner_token"])
 
-    incomplete = await client.post(
-        f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/events",
-        json={
+    invalid_payloads = [
+        {
             "eventType": "activity",
             "title": "只有纬度",
             "startAt": "2026-06-01T08:30:00Z",
             "latitude": 30.27,
             "meta": {"icon": "pin", "allDay": False},
         },
-        headers=headers,
-    )
-    assert incomplete.status_code == 422
-
-    out_of_range = await client.post(
-        f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/events",
-        json={
+        {
+            "eventType": "activity",
+            "title": "只有经度",
+            "startAt": "2026-06-01T08:45:00Z",
+            "longitude": 120.15,
+            "meta": {"icon": "pin", "allDay": False},
+        },
+        {
             "eventType": "activity",
             "title": "非法纬度",
             "startAt": "2026-06-01T09:00:00Z",
@@ -190,9 +195,23 @@ async def test_rejects_incomplete_or_out_of_range_coordinates(client, coordinate
             "longitude": 120.15,
             "meta": {"icon": "pin", "allDay": False},
         },
-        headers=headers,
-    )
-    assert out_of_range.status_code == 422
+        {
+            "eventType": "activity",
+            "title": "非法经度",
+            "startAt": "2026-06-01T09:15:00Z",
+            "latitude": 30.27,
+            "longitude": 181,
+            "meta": {"icon": "pin", "allDay": False},
+        },
+    ]
+
+    for payload in invalid_payloads:
+        response = await client.post(
+            f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/events",
+            json=payload,
+            headers=headers,
+        )
+        assert response.status_code == 422
 
 
 @pytest.mark.asyncio
