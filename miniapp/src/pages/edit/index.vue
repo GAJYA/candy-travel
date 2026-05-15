@@ -593,6 +593,66 @@
       </view>
     </view>
 
+    <!-- 地图地点搜索弹层 -->
+    <view v-if="placeSearchOpen" class="modal-mask" @click="closePlaceSearch">
+      <view class="modal modal--place-search" @click.stop>
+        <text class="modal-title">选择地图地点</text>
+        <view class="place-search-row">
+          <input
+            class="candy-input modal-input place-search-input"
+            v-model="placeSearchKeyword"
+            placeholder="搜索地点"
+            confirm-type="search"
+            @confirm="runPlaceSearch"
+          />
+          <button
+            class="mini-action mini-action--secondary place-search-button"
+            :disabled="placeSearchLoading || placeSearchApplying || !placeSearchKeyword.trim()"
+            @click="runPlaceSearch"
+          >
+            {{ placeSearchLoading ? '搜索中' : '搜索' }}
+          </button>
+        </view>
+        <text v-if="placeSearchError" class="place-search-message">{{ placeSearchError }}</text>
+        <scroll-view class="place-search-results" scroll-y :show-scrollbar="false">
+          <view v-if="placeSearchLoading" class="place-search-state">
+            <text>搜索中...</text>
+          </view>
+          <view v-else-if="!placeSearchResults.length && !placeSearchError" class="place-search-state">
+            <text>输入地点后搜索</text>
+          </view>
+          <view
+            v-for="place in placeSearchResults"
+            :key="place.id"
+            class="place-result-row"
+            @click="onSelectPlaceSuggestion(place)"
+          >
+            <view class="place-result-copy">
+              <text class="place-result-title">{{ place.title }}</text>
+              <text class="place-result-address">{{ placeSubtitle(place) }}</text>
+            </view>
+            <text class="place-result-action">{{ placeSearchApplying ? '保存中' : '选择' }}</text>
+          </view>
+        </scroll-view>
+        <view class="modal-actions">
+          <button
+            class="candy-btn candy-btn--ghost"
+            :disabled="placeSearchLoading || placeSearchApplying"
+            @click="closePlaceSearch"
+          >
+            取消
+          </button>
+          <button
+            class="candy-btn candy-btn--primary"
+            :disabled="placeSearchLoading || placeSearchApplying"
+            @click="onFallbackChooseLocation"
+          >
+            打开地图选择
+          </button>
+        </view>
+      </view>
+    </view>
+
     <!-- 添加检查项弹层 -->
     <view v-if="addOpen" class="modal-mask" @click="addOpen = false">
       <view class="modal" @click.stop>
@@ -629,6 +689,7 @@ import { computed, reactive, ref } from 'vue'
 import { onBackPress, onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 
 import CandyIcon from '../../components/CandyIcon.vue'
+import { ApiRequestError } from '../../services/api'
 import type { TransportMode, TripDetail, TripInvite, TripMember, TripStatus } from '../../services/trip'
 import { tripApi } from '../../services/trip'
 import {
@@ -647,6 +708,7 @@ import {
   type AiImportUploadTask,
   type AiTripEventCandidate,
 } from '../../services/ai-import'
+import { placeSearchApi, type PlaceSuggestion } from '../../services/place-search'
 import { useAuthStore } from '../../stores/auth'
 import { buildTripMapData, hasEventCoordinates } from '../../utils/trip-map'
 
@@ -674,6 +736,13 @@ const eventLoading = ref(false)
 const eventAddOpen = ref(false)
 const eventEditingId = ref<string>('')
 const locationSavingEventId = ref<string>('')
+const placeSearchOpen = ref(false)
+const placeSearchLoading = ref(false)
+const placeSearchApplying = ref(false)
+const placeSearchKeyword = ref('')
+const placeSearchResults = ref<PlaceSuggestion[]>([])
+const placeSearchError = ref('')
+const placeSearchTarget = ref<PlaceSearchTarget | null>(null)
 const aiImportOpen = ref(false)
 const aiImportReviewOpen = ref(false)
 const aiImportLoading = ref(false)
@@ -708,6 +777,10 @@ interface ChosenTripLocation {
   latitude: number
   longitude: number
 }
+
+type PlaceSearchTarget =
+  | { type: 'form' }
+  | { type: 'event'; event: TripEvent }
 
 interface FormState {
   title: string
@@ -1512,20 +1585,90 @@ const chooseTripLocation = async (
   })
 }
 
-const onChooseEventLocation = async () => {
-  const location = await chooseTripLocation(eventForm, eventForm.locationName || eventForm.title)
-  if (!location) return
-  eventForm.locationName = location.locationName || eventForm.locationName
-  eventForm.address = location.address || eventForm.address
-  eventForm.latitude = location.latitude
-  eventForm.longitude = location.longitude
+const eventFormSearchKeyword = () => eventForm.locationName.trim() || eventForm.title.trim()
+
+const eventSearchKeyword = (event: TripEvent) => (
+  (event.locationName || '').trim() || event.title.trim()
+)
+
+const placeSubtitle = (place: PlaceSuggestion) => (
+  place.address
+  || [place.city, place.district, place.category].filter(Boolean).join(' · ')
+  || '暂无详细地址'
+)
+
+const placeSearchSeed = () => {
+  const target = placeSearchTarget.value
+  if (!target) return null
+  return target.type === 'event' ? target.event : eventForm
 }
 
-const onChooseMissingEventLocation = async (event: TripEvent) => {
+const closePlaceSearch = () => {
+  if (placeSearchLoading.value || placeSearchApplying.value) return
+  placeSearchOpen.value = false
+  placeSearchTarget.value = null
+  placeSearchError.value = ''
+}
+
+const runPlaceSearch = async () => {
+  const keyword = placeSearchKeyword.value.trim()
+  if (!keyword) {
+    placeSearchResults.value = []
+    placeSearchError.value = '请输入地点关键词'
+    return
+  }
+
+  placeSearchLoading.value = true
+  placeSearchError.value = ''
+  try {
+    const seed = placeSearchSeed()
+    const results = await placeSearchApi.search({
+      keyword,
+      latitude: seed?.latitude ?? null,
+      longitude: seed?.longitude ?? null,
+      pageSize: 10,
+    })
+    placeSearchResults.value = results
+    if (!results.length) {
+      placeSearchError.value = '没有找到匹配地点'
+    }
+  } catch (e) {
+    placeSearchResults.value = []
+    if (e instanceof ApiRequestError && e.statusCode === 503) {
+      placeSearchError.value = '地图搜索还没配置，可先打开地图手动选择'
+      return
+    }
+    if (e instanceof ApiRequestError && e.statusCode === 502) {
+      placeSearchError.value = '地点搜索暂不可用，可打开地图手动选择'
+      return
+    }
+    placeSearchError.value = e instanceof Error ? e.message : '地点搜索失败'
+  } finally {
+    placeSearchLoading.value = false
+  }
+}
+
+const openPlaceSearch = async (target: PlaceSearchTarget, keyword: string) => {
+  const trimmed = keyword.trim()
+  if (!trimmed) {
+    uni.showToast({ title: '请先填写地点', icon: 'none' })
+    return
+  }
+  placeSearchTarget.value = target
+  placeSearchKeyword.value = trimmed
+  placeSearchResults.value = []
+  placeSearchError.value = ''
+  placeSearchOpen.value = true
+  await runPlaceSearch()
+}
+
+const applyLocationToEvent = async (
+  event: TripEvent,
+  location: ChosenTripLocation,
+) => {
   if (!canEditEvent(event) || locationSavingEventId.value) return
-  const location = await chooseTripLocation(event, event.locationName || event.title)
-  if (!location) return
   locationSavingEventId.value = event.id
+  placeSearchApplying.value = true
   try {
     const updated = await tripEventApi.patch(event.id, {
       locationName: location.locationName || event.locationName,
@@ -1536,6 +1679,8 @@ const onChooseMissingEventLocation = async (event: TripEvent) => {
     tripEvents.value = tripEvents.value.map((item) => (
       item.id === updated.id ? updated : item
     ))
+    placeSearchOpen.value = false
+    placeSearchTarget.value = null
     uni.showToast({ title: '已保存地点', icon: 'success' })
   } catch {
     uni.showToast({ title: '保存地点失败', icon: 'none' })
@@ -1543,7 +1688,72 @@ const onChooseMissingEventLocation = async (event: TripEvent) => {
     if (locationSavingEventId.value === event.id) {
       locationSavingEventId.value = ''
     }
+    placeSearchApplying.value = false
   }
+}
+
+const applyPlaceSuggestionToForm = (place: PlaceSuggestion) => {
+  eventForm.locationName = place.title || eventForm.locationName
+  eventForm.address = place.address || eventForm.address
+  eventForm.latitude = place.latitude
+  eventForm.longitude = place.longitude
+  placeSearchOpen.value = false
+  placeSearchTarget.value = null
+  placeSearchError.value = ''
+}
+
+const onSelectPlaceSuggestion = async (place: PlaceSuggestion) => {
+  if (placeSearchApplying.value) return
+  const target = placeSearchTarget.value
+  if (!target) return
+  if (target.type === 'form') {
+    applyPlaceSuggestionToForm(place)
+    return
+  }
+  await applyLocationToEvent(target.event, {
+    locationName: place.title,
+    address: place.address,
+    latitude: place.latitude,
+    longitude: place.longitude,
+  })
+}
+
+const chooseEventFormLocationFromMap = async () => {
+  const location = await chooseTripLocation(eventForm, eventForm.locationName || eventForm.title)
+  if (!location) return
+  eventForm.locationName = location.locationName || eventForm.locationName
+  eventForm.address = location.address || eventForm.address
+  eventForm.latitude = location.latitude
+  eventForm.longitude = location.longitude
+}
+
+const chooseMissingEventLocationFromMap = async (event: TripEvent) => {
+  if (!canEditEvent(event) || locationSavingEventId.value) return
+  const location = await chooseTripLocation(event, eventSearchKeyword(event))
+  if (!location) return
+  await applyLocationToEvent(event, location)
+}
+
+const onFallbackChooseLocation = async () => {
+  if (placeSearchLoading.value || placeSearchApplying.value) return
+  const target = placeSearchTarget.value
+  if (!target) return
+  placeSearchOpen.value = false
+  placeSearchTarget.value = null
+  if (target.type === 'form') {
+    await chooseEventFormLocationFromMap()
+  } else {
+    await chooseMissingEventLocationFromMap(target.event)
+  }
+}
+
+const onChooseEventLocation = () => {
+  void openPlaceSearch({ type: 'form' }, eventFormSearchKeyword())
+}
+
+const onChooseMissingEventLocation = (event: TripEvent) => {
+  if (!canEditEvent(event) || locationSavingEventId.value) return
+  void openPlaceSearch({ type: 'event', event }, eventSearchKeyword(event))
 }
 
 const onEventDateChange = (e: any) => {
@@ -2511,6 +2721,86 @@ const onAddSubmit = async () => {
 .event-location-status--bound {
   color: $candy-primary;
   font-weight: 700;
+}
+.modal--place-search {
+  max-height: calc(82vh - env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.place-search-row {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+.place-search-input {
+  flex: 1;
+  min-width: 0;
+}
+.place-search-button {
+  flex: 0 0 126rpx;
+  min-width: 126rpx;
+}
+.place-search-message {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  line-height: 1.45;
+}
+.place-search-results {
+  flex: 1 1 auto;
+  min-height: 260rpx;
+  max-height: 560rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+.place-search-state {
+  min-height: 220rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-body-md;
+}
+.place-result-row {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 4rpx;
+  border-bottom: 2rpx solid $candy-outline-variant;
+}
+.place-result-row:active {
+  background: $candy-surface-container-low;
+}
+.place-result-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+.place-result-title {
+  color: $candy-on-surface;
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.place-result-address {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.place-result-action {
+  flex: 0 0 auto;
+  color: $candy-secondary;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
 }
 
 /* 添加检查项弹层 */

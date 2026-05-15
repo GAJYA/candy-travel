@@ -8,6 +8,7 @@ from app.routes import (
     health,
     inspirations,
     me,
+    places,
     trip_events,
     trip_invites,
     trips,
@@ -37,3 +38,4 @@ app.include_router(ai_import.router, prefix=api_v1)
 app.include_router(trip_invites.router, prefix=api_v1)
 app.include_router(checklist.router, prefix=api_v1)
 app.include_router(inspirations.router, prefix=api_v1)
+app.include_router(places.router, prefix=api_v1)

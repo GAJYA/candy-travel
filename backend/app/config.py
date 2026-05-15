@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     wechat_appid: str = ""
     wechat_appsecret: str = ""
 
+    tencent_map_key: str = Field(default="", validation_alias="TENCENT_MAP_KEY")
+
     ai_base_url: str = Field(
         default="",
         validation_alias=AliasChoices("AI_BASE_URL", "baseURL"),
