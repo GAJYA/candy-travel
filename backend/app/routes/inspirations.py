@@ -95,7 +95,8 @@ async def _extract_inspiration_plan(shared_content: str) -> dict[str, str]:
 JSON 字段：
 - destination: 目的地，尽量短，例如“冰岛”“新西兰南岛”“杭州”
 - note: 30 字以内的一句话摘要，适合列表展示
-- planDetail: 详细计划，用中文分点，包含建议天数、适合季节、路线/城市、亮点、准备提醒。没有信息时基于内容谨慎概括，不要编造具体店名、价格或航班。
+- planDetail: 详细计划，用中文分点，包含建议天数、适合季节、路线/城市、
+  亮点、准备提醒。没有信息时基于内容谨慎概括，不要编造具体店名、价格或航班。
 
 用户内容：
 {shared_content[:8000]}

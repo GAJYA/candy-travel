@@ -291,7 +291,7 @@ const migrateLegacyWishlist = async () => {
       legacyItems
         .map((item) => ({
           destination: typeof item.destination === 'string' ? item.destination.trim() : '',
-          type: item.type === 'long' ? 'long' : 'short',
+          type: (item.type === 'long' ? 'long' : 'short') as InspirationType,
           note: typeof item.note === 'string' && item.note.trim() ? item.note.trim() : null,
         }))
         .filter((item) => item.destination)
