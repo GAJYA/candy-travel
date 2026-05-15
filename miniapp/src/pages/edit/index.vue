@@ -1463,8 +1463,27 @@ const onEditEvent = (event: TripEvent) => {
   eventAddOpen.value = true
 }
 
-const chooseTripLocation = (seed?: Pick<EventFormState, 'latitude' | 'longitude'>): Promise<ChosenTripLocation | null> => (
+const copyMapSearchKeyword = (keyword: string): Promise<void> => (
   new Promise((resolve) => {
+    const data = keyword.trim()
+    if (!data) {
+      resolve()
+      return
+    }
+    uni.setClipboardData({
+      data,
+      success: () => resolve(),
+      fail: () => resolve(),
+    })
+  })
+)
+
+const chooseTripLocation = async (
+  seed?: Pick<EventFormState, 'latitude' | 'longitude'>,
+  keyword = '',
+): Promise<ChosenTripLocation | null> => {
+  await copyMapSearchKeyword(keyword)
+  return new Promise((resolve) => {
     uni.chooseLocation({
       latitude: seed?.latitude ?? undefined,
       longitude: seed?.longitude ?? undefined,
@@ -1491,10 +1510,10 @@ const chooseTripLocation = (seed?: Pick<EventFormState, 'latitude' | 'longitude'
       },
     })
   })
-)
+}
 
 const onChooseEventLocation = async () => {
-  const location = await chooseTripLocation(eventForm)
+  const location = await chooseTripLocation(eventForm, eventForm.locationName || eventForm.title)
   if (!location) return
   eventForm.locationName = location.locationName || eventForm.locationName
   eventForm.address = location.address || eventForm.address
@@ -1504,7 +1523,7 @@ const onChooseEventLocation = async () => {
 
 const onChooseMissingEventLocation = async (event: TripEvent) => {
   if (!canEditEvent(event) || locationSavingEventId.value) return
-  const location = await chooseTripLocation(event)
+  const location = await chooseTripLocation(event, event.locationName || event.title)
   if (!location) return
   locationSavingEventId.value = event.id
   try {
