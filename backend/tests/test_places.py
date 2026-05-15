@@ -12,6 +12,8 @@ from app.models import User
 from app.schemas.place import PlaceSuggestionOut
 from app.services.jwt_service import issue_token
 from app.services.tencent_map import (
+    TENCENT_MAP_GEOCODER_URL,
+    TENCENT_MAP_SUGGESTION_URL,
     TencentMapNotConfigured,
     search_place_suggestions,
 )
@@ -61,7 +63,7 @@ async def test_search_places_requires_map_key(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_search_place_suggestions_normalizes_tencent_response(monkeypatch):
-    captured_params = {}
+    captured_requests = []
 
     class FakeResponse:
         def raise_for_status(self):
@@ -95,7 +97,7 @@ async def test_search_place_suggestions_normalizes_tencent_response(monkeypatch)
             return None
 
         async def get(self, url, params):
-            captured_params.update(params)
+            captured_requests.append({"url": url, "params": dict(params)})
             return FakeResponse()
 
     monkeypatch.setattr(settings, "tencent_map_key", "test-map-key")
@@ -109,11 +111,13 @@ async def test_search_place_suggestions_normalizes_tencent_response(monkeypatch)
         page_size=6,
     )
 
-    assert captured_params["key"] == "test-map-key"
-    assert captured_params["keyword"] == "扬州东站"
-    assert captured_params["region"] == "扬州"
-    assert captured_params["location"] == "32.39,119.52"
-    assert captured_params["page_size"] == 6
+    first_params = captured_requests[0]["params"]
+    assert captured_requests[0]["url"] == TENCENT_MAP_SUGGESTION_URL
+    assert first_params["key"] == "test-map-key"
+    assert first_params["keyword"] == "扬州东站"
+    assert first_params["region"] == "扬州"
+    assert first_params["location"] == "32.39,119.52"
+    assert first_params["page_size"] == 6
     assert results == [
         PlaceSuggestionOut(
             id="poi-1",
@@ -124,6 +128,149 @@ async def test_search_place_suggestions_normalizes_tencent_response(monkeypatch)
             district="广陵区",
             latitude=32.3942,
             longitude=119.5257,
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_place_suggestions_uses_overseas_fallback(monkeypatch):
+    captured_requests = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+            self.responses = [
+                {"status": 0, "message": "query ok", "data": []},
+                {
+                    "status": 0,
+                    "message": "query ok",
+                    "data": [
+                        {
+                            "id": "oversea-1",
+                            "title": "Kuala Lumpur",
+                            "address": "Kuala Lumpur, Malaysia",
+                            "category": "城市",
+                            "location": {"lat": 3.139003, "lng": 101.686855},
+                        }
+                    ],
+                },
+            ]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, params):
+            captured_requests.append({"url": url, "params": dict(params)})
+            return FakeResponse(self.responses.pop(0))
+
+    monkeypatch.setattr(settings, "tencent_map_key", "test-map-key")
+    monkeypatch.setattr("app.services.tencent_map.httpx.AsyncClient", FakeAsyncClient)
+
+    results = await search_place_suggestions(
+        keyword="吉隆坡",
+        region="上海",
+        latitude=31.23,
+        longitude=121.47,
+    )
+
+    assert len(captured_requests) == 2
+    assert captured_requests[0]["params"]["region"] == "上海"
+    assert captured_requests[0]["params"]["location"] == "31.23,121.47"
+    assert captured_requests[1]["url"] == TENCENT_MAP_SUGGESTION_URL
+    assert captured_requests[1]["params"]["oversea"] == 1
+    assert captured_requests[1]["params"]["language"] == "cn"
+    assert "region" not in captured_requests[1]["params"]
+    assert "location" not in captured_requests[1]["params"]
+    assert results == [
+        PlaceSuggestionOut(
+            id="oversea-1",
+            title="Kuala Lumpur",
+            address="Kuala Lumpur, Malaysia",
+            category="城市",
+            city=None,
+            district=None,
+            latitude=3.139003,
+            longitude=101.686855,
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_place_suggestions_uses_overseas_geocoder_fallback(monkeypatch):
+    captured_requests = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+            self.responses = [
+                {"status": 0, "message": "query ok", "data": []},
+                {"status": 0, "message": "query ok", "data": []},
+                {
+                    "status": 0,
+                    "message": "query ok",
+                    "result": {
+                        "location": {"lat": 4.175496, "lng": 73.509347},
+                        "address": "Male, Maldives",
+                        "address_components": {
+                            "nation": "Maldives",
+                            "ad_level_3": "Male",
+                        },
+                    },
+                },
+            ]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, params):
+            captured_requests.append({"url": url, "params": dict(params)})
+            return FakeResponse(self.responses.pop(0))
+
+    monkeypatch.setattr(settings, "tencent_map_key", "test-map-key")
+    monkeypatch.setattr("app.services.tencent_map.httpx.AsyncClient", FakeAsyncClient)
+
+    results = await search_place_suggestions(keyword="马累")
+
+    assert len(captured_requests) == 3
+    assert captured_requests[2]["url"] == TENCENT_MAP_GEOCODER_URL
+    assert captured_requests[2]["params"]["address"] == "马累"
+    assert captured_requests[2]["params"]["oversea"] == 1
+    assert results == [
+        PlaceSuggestionOut(
+            id="geocoder:马累:4.175496:73.509347",
+            title="马累",
+            address="Male, Maldives",
+            category="地址解析",
+            city="Male",
+            district=None,
+            latitude=4.175496,
+            longitude=73.509347,
         )
     ]
 

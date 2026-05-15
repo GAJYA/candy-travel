@@ -8,6 +8,7 @@ from app.config import settings
 from app.schemas.place import PlaceSuggestionOut
 
 TENCENT_MAP_SUGGESTION_URL = "https://apis.map.qq.com/ws/place/v1/suggestion"
+TENCENT_MAP_GEOCODER_URL = "https://apis.map.qq.com/ws/geocoder/v1/"
 
 
 class TencentMapError(Exception):
@@ -44,6 +45,90 @@ def _normalize_suggestion(item: dict[str, Any]) -> PlaceSuggestionOut | None:
     )
 
 
+def _normalize_geocoder_result(
+    data: dict[str, Any],
+    *,
+    keyword: str,
+) -> PlaceSuggestionOut | None:
+    result = data.get("result")
+    if not isinstance(result, dict):
+        return None
+
+    location = result.get("location")
+    if not isinstance(location, dict):
+        return None
+
+    latitude = location.get("lat")
+    longitude = location.get("lng")
+    if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+        return None
+
+    title = keyword.strip()
+    if not title:
+        return None
+
+    address = str(result.get("address") or "").strip()
+    components = result.get("address_components")
+    if not isinstance(components, dict):
+        components = {}
+
+    return PlaceSuggestionOut(
+        id=f"geocoder:{title}:{float(latitude):.6f}:{float(longitude):.6f}",
+        title=title,
+        address=address,
+        category="地址解析",
+        city=str(components.get("ad_level_3") or "").strip() or None,
+        district=str(components.get("ad_level_4") or "").strip() or None,
+        latitude=float(latitude),
+        longitude=float(longitude),
+    )
+
+
+async def _request_tencent_json(
+    client: httpx.AsyncClient,
+    *,
+    url: str,
+    params: dict[str, str | int],
+) -> dict[str, Any]:
+    try:
+        response = await client.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, ValueError) as e:
+        raise TencentMapError("Tencent Map search request failed") from e
+
+    if not isinstance(data, dict):
+        raise TencentMapError("Tencent Map search returned invalid data")
+
+    if data.get("status") != 0:
+        message = str(data.get("message") or "Tencent Map search failed")
+        raise TencentMapError(message)
+
+    return data
+
+
+def _dedupe_suggestions(
+    suggestions: list[PlaceSuggestionOut],
+    *,
+    page_size: int,
+) -> list[PlaceSuggestionOut]:
+    deduped: list[PlaceSuggestionOut] = []
+    seen: set[tuple[str, float, float]] = set()
+    for suggestion in suggestions:
+        key = (
+            suggestion.title,
+            round(suggestion.latitude, 6),
+            round(suggestion.longitude, 6),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(suggestion)
+        if len(deduped) >= page_size:
+            break
+    return deduped
+
+
 async def search_place_suggestions(
     *,
     keyword: str,
@@ -56,11 +141,13 @@ async def search_place_suggestions(
     if not key:
         raise TencentMapNotConfigured("Tencent Map search is not configured")
 
+    normalized_keyword = keyword.strip()
+    normalized_page_size = max(1, min(page_size, 10))
     params: dict[str, str | int] = {
         "key": key,
-        "keyword": keyword.strip(),
+        "keyword": normalized_keyword,
         "output": "json",
-        "page_size": max(1, min(page_size, 10)),
+        "page_size": normalized_page_size,
         "page_index": 1,
         "policy": 0,
     }
@@ -69,22 +156,68 @@ async def search_place_suggestions(
     if latitude is not None and longitude is not None:
         params["location"] = f"{latitude},{longitude}"
 
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            response = await client.get(TENCENT_MAP_SUGGESTION_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
-    except (httpx.HTTPError, ValueError) as e:
-        raise TencentMapError("Tencent Map search request failed") from e
+    async with httpx.AsyncClient(timeout=8) as client:
+        data = await _request_tencent_json(
+            client,
+            url=TENCENT_MAP_SUGGESTION_URL,
+            params=params,
+        )
 
-    if data.get("status") != 0:
-        message = str(data.get("message") or "Tencent Map search failed")
-        raise TencentMapError(message)
+        suggestions = []
+        for item in data.get("data") or []:
+            if isinstance(item, dict):
+                suggestion = _normalize_suggestion(item)
+                if suggestion is not None:
+                    suggestions.append(suggestion)
 
-    suggestions = []
-    for item in data.get("data") or []:
-        if isinstance(item, dict):
-            suggestion = _normalize_suggestion(item)
-            if suggestion is not None:
-                suggestions.append(suggestion)
-    return suggestions
+        if len(suggestions) < normalized_page_size:
+            overseas_params: dict[str, str | int] = {
+                "key": key,
+                "keyword": normalized_keyword,
+                "output": "json",
+                "oversea": 1,
+                "language": "cn",
+            }
+            try:
+                overseas_data = await _request_tencent_json(
+                    client,
+                    url=TENCENT_MAP_SUGGESTION_URL,
+                    params=overseas_params,
+                )
+            except TencentMapError:
+                overseas_data = {}
+            for item in overseas_data.get("data") or []:
+                if isinstance(item, dict):
+                    suggestion = _normalize_suggestion(item)
+                    if suggestion is not None:
+                        suggestions.append(suggestion)
+
+        suggestions = _dedupe_suggestions(
+            suggestions,
+            page_size=normalized_page_size,
+        )
+
+        if not suggestions:
+            geocoder_params: dict[str, str | int] = {
+                "key": key,
+                "address": normalized_keyword,
+                "output": "json",
+                "oversea": 1,
+                "language": "cn",
+            }
+            try:
+                geocoder_data = await _request_tencent_json(
+                    client,
+                    url=TENCENT_MAP_GEOCODER_URL,
+                    params=geocoder_params,
+                )
+            except TencentMapError:
+                geocoder_data = {}
+            geocoded = _normalize_geocoder_result(
+                geocoder_data,
+                keyword=normalized_keyword,
+            )
+            if geocoded is not None:
+                suggestions.append(geocoded)
+
+    return suggestions[:normalized_page_size]
