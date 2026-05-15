@@ -10,6 +10,14 @@
         "setting": {
             "urlCheck": false
         },
+        "permission": {
+            "scope.userLocation": {
+                "desc": "用于在地图中选择行程事件地点"
+            }
+        },
+        "requiredPrivateInfos": [
+            "chooseLocation"
+        ],
         "usingComponents": true
     },
     "uniStatistics": {
