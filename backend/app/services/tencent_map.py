@@ -10,6 +10,43 @@ from app.schemas.place import PlaceSuggestionOut
 TENCENT_MAP_SUGGESTION_URL = "https://apis.map.qq.com/ws/place/v1/suggestion"
 TENCENT_MAP_GEOCODER_URL = "https://apis.map.qq.com/ws/geocoder/v1/"
 
+OVERSEAS_PLACE_HINTS: tuple[dict[str, Any], ...] = (
+    {
+        "aliases": ("吉隆坡", "kuala lumpur", "kl malaysia"),
+        "title": "吉隆坡",
+        "address": "Kuala Lumpur, Malaysia",
+        "category": "城市",
+        "city": "Kuala Lumpur",
+        "latitude": 3.139003,
+        "longitude": 101.686855,
+    },
+    {
+        "aliases": ("马累", "马列", "malé", "male maldives", "male city maldives"),
+        "title": "马累",
+        "address": "Malé, Maldives",
+        "category": "城市",
+        "city": "Malé",
+        "latitude": 4.175496,
+        "longitude": 73.509347,
+    },
+    {
+        "aliases": (
+            "翡翠法鲁富士",
+            "翡翠法魯富士",
+            "法鲁富士",
+            "法魯富士",
+            "faarufushi",
+            "emerald faarufushi",
+        ),
+        "title": "翡翠法鲁富士",
+        "address": "Emerald Faarufushi Resort & Spa, Raa Atoll, Maldives",
+        "category": "度假酒店",
+        "city": "Raa Atoll",
+        "latitude": 5.768427,
+        "longitude": 72.965614,
+    },
+)
+
 
 class TencentMapError(Exception):
     """Raised when Tencent Map search cannot return usable suggestions."""
@@ -43,6 +80,44 @@ def _normalize_suggestion(item: dict[str, Any]) -> PlaceSuggestionOut | None:
         latitude=float(latitude),
         longitude=float(longitude),
     )
+
+
+def _normalize_search_text(value: str) -> str:
+    return value.strip().casefold()
+
+
+def _is_overseas_hint_match(keyword: str, alias: str) -> bool:
+    normalized_keyword = _normalize_search_text(keyword)
+    normalized_alias = _normalize_search_text(alias)
+    if not normalized_keyword or not normalized_alias:
+        return False
+    return normalized_keyword in normalized_alias or normalized_alias in normalized_keyword
+
+
+def _matching_overseas_hints(keyword: str) -> list[PlaceSuggestionOut]:
+    suggestions = []
+    for hint in OVERSEAS_PLACE_HINTS:
+        aliases = hint.get("aliases")
+        if not isinstance(aliases, tuple):
+            continue
+        if not any(_is_overseas_hint_match(keyword, alias) for alias in aliases):
+            continue
+        title = str(hint["title"])
+        latitude = float(hint["latitude"])
+        longitude = float(hint["longitude"])
+        suggestions.append(
+            PlaceSuggestionOut(
+                id=f"overseas-hint:{title}:{latitude:.6f}:{longitude:.6f}",
+                title=title,
+                address=str(hint["address"]),
+                category=str(hint["category"]),
+                city=str(hint["city"]),
+                district=None,
+                latitude=latitude,
+                longitude=longitude,
+            )
+        )
+    return suggestions
 
 
 def _normalize_geocoder_result(
@@ -163,7 +238,7 @@ async def search_place_suggestions(
             params=params,
         )
 
-        suggestions = []
+        suggestions = _matching_overseas_hints(normalized_keyword)
         for item in data.get("data") or []:
             if isinstance(item, dict):
                 suggestion = _normalize_suggestion(item)

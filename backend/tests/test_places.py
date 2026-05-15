@@ -157,10 +157,10 @@ async def test_search_place_suggestions_uses_overseas_fallback(monkeypatch):
                     "data": [
                         {
                             "id": "oversea-1",
-                            "title": "Kuala Lumpur",
-                            "address": "Kuala Lumpur, Malaysia",
-                            "category": "城市",
-                            "location": {"lat": 3.139003, "lng": 101.686855},
+                            "title": "White House",
+                            "address": "1600 Pennsylvania Avenue NW, Washington, DC 20500, USA",
+                            "category": "地标",
+                            "location": {"lat": 38.897676, "lng": -77.036528},
                         }
                     ],
                 },
@@ -180,7 +180,7 @@ async def test_search_place_suggestions_uses_overseas_fallback(monkeypatch):
     monkeypatch.setattr("app.services.tencent_map.httpx.AsyncClient", FakeAsyncClient)
 
     results = await search_place_suggestions(
-        keyword="吉隆坡",
+        keyword="White House",
         region="上海",
         latitude=31.23,
         longitude=121.47,
@@ -197,15 +197,67 @@ async def test_search_place_suggestions_uses_overseas_fallback(monkeypatch):
     assert results == [
         PlaceSuggestionOut(
             id="oversea-1",
-            title="Kuala Lumpur",
-            address="Kuala Lumpur, Malaysia",
-            category="城市",
+            title="White House",
+            address="1600 Pennsylvania Avenue NW, Washington, DC 20500, USA",
+            category="地标",
             city=None,
             district=None,
-            latitude=3.139003,
-            longitude=101.686855,
+            latitude=38.897676,
+            longitude=-77.036528,
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_search_place_suggestions_prioritizes_known_overseas_hint(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "status": 0,
+                "message": "query ok",
+                "data": [
+                    {
+                        "id": "domestic-1",
+                        "title": "吉隆坡路",
+                        "address": "广西壮族自治区崇左市宁明县",
+                        "category": "道路",
+                        "location": {"lat": 22.12, "lng": 107.08},
+                    }
+                ],
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, params):
+            return FakeResponse()
+
+    monkeypatch.setattr(settings, "tencent_map_key", "test-map-key")
+    monkeypatch.setattr("app.services.tencent_map.httpx.AsyncClient", FakeAsyncClient)
+
+    results = await search_place_suggestions(keyword="吉隆坡", page_size=2)
+
+    assert results[0] == PlaceSuggestionOut(
+        id="overseas-hint:吉隆坡:3.139003:101.686855",
+        title="吉隆坡",
+        address="Kuala Lumpur, Malaysia",
+        category="城市",
+        city="Kuala Lumpur",
+        district=None,
+        latitude=3.139003,
+        longitude=101.686855,
+    )
+    assert results[1].title == "吉隆坡路"
 
 
 @pytest.mark.asyncio
@@ -232,11 +284,11 @@ async def test_search_place_suggestions_uses_overseas_geocoder_fallback(monkeypa
                     "status": 0,
                     "message": "query ok",
                     "result": {
-                        "location": {"lat": 4.175496, "lng": 73.509347},
-                        "address": "Male, Maldives",
+                        "location": {"lat": 25.198189, "lng": 55.272187},
+                        "address": "Dubai, United Arab Emirates",
                         "address_components": {
-                            "nation": "Maldives",
-                            "ad_level_3": "Male",
+                            "nation": "United Arab Emirates",
+                            "ad_level_3": "Dubai",
                         },
                     },
                 },
@@ -255,22 +307,22 @@ async def test_search_place_suggestions_uses_overseas_geocoder_fallback(monkeypa
     monkeypatch.setattr(settings, "tencent_map_key", "test-map-key")
     monkeypatch.setattr("app.services.tencent_map.httpx.AsyncClient", FakeAsyncClient)
 
-    results = await search_place_suggestions(keyword="马累")
+    results = await search_place_suggestions(keyword="Atlantis Dubai")
 
     assert len(captured_requests) == 3
     assert captured_requests[2]["url"] == TENCENT_MAP_GEOCODER_URL
-    assert captured_requests[2]["params"]["address"] == "马累"
+    assert captured_requests[2]["params"]["address"] == "Atlantis Dubai"
     assert captured_requests[2]["params"]["oversea"] == 1
     assert results == [
         PlaceSuggestionOut(
-            id="geocoder:马累:4.175496:73.509347",
-            title="马累",
-            address="Male, Maldives",
+            id="geocoder:Atlantis Dubai:25.198189:55.272187",
+            title="Atlantis Dubai",
+            address="Dubai, United Arab Emirates",
             category="地址解析",
-            city="Male",
+            city="Dubai",
             district=None,
-            latitude=4.175496,
-            longitude=73.509347,
+            latitude=25.198189,
+            longitude=55.272187,
         )
     ]
 
