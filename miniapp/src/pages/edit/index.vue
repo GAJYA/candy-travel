@@ -139,8 +139,32 @@
       </view>
     </view>
 
+    <view v-if="tripId" class="trip-view-tabs">
+      <view
+        class="trip-view-tab"
+        :class="{ 'trip-view-tab--active': activeTripView === 'schedule' }"
+        @click="activeTripView = 'schedule'"
+      >
+        <text>日程</text>
+      </view>
+      <view
+        class="trip-view-tab"
+        :class="{ 'trip-view-tab--active': activeTripView === 'map' }"
+        @click="activeTripView = 'map'"
+      >
+        <text>地图</text>
+      </view>
+      <view
+        class="trip-view-tab"
+        :class="{ 'trip-view-tab--active': activeTripView === 'checklist' }"
+        @click="activeTripView = 'checklist'"
+      >
+        <text>清单</text>
+      </view>
+    </view>
+
     <!-- 每日行程 -->
-    <view class="section">
+    <view v-if="!tripId || activeTripView === 'schedule'" class="section">
       <view class="section-head section-head--split">
         <view class="section-title-row">
           <view class="section-icon">
@@ -215,8 +239,64 @@
       </view>
     </view>
 
+    <view v-if="tripId && activeTripView === 'map'" class="section">
+      <view class="section-head">
+        <view class="section-icon">
+          <CandyIcon name="pin" />
+        </view>
+        <text class="section-title">路线地图</text>
+      </view>
+      <view class="candy-card map-panel">
+        <map
+          v-if="tripMapData.mappableEvents.length"
+          class="route-map"
+          :latitude="tripMapData.center.latitude"
+          :longitude="tripMapData.center.longitude"
+          :markers="tripMapData.markers"
+          :polyline="tripMapData.polyline"
+          :include-points="tripMapData.includePoints"
+          :show-location="false"
+        />
+        <view v-else class="empty-events map-empty">
+          <text class="empty-events__title">还没有可上地图的地点</text>
+          <text class="empty-events__hint">添加事件后，用地图选择地点即可生成路线</text>
+        </view>
+
+        <view v-if="tripMapData.mappableEvents.length" class="map-route-list">
+          <view
+            v-for="(event, index) in tripMapData.mappableEvents"
+            :key="event.id"
+            class="map-route-row"
+          >
+            <text class="map-route-index">{{ index + 1 }}</text>
+            <view class="map-route-copy">
+              <text class="map-route-title">{{ event.locationName || event.title }}</text>
+              <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view v-if="tripMapData.missingLocationEvents.length" class="map-missing">
+          <text class="map-missing__title">未上地图</text>
+          <view
+            v-for="event in tripMapData.missingLocationEvents"
+            :key="event.id"
+            class="map-missing-row"
+          >
+            <view class="map-missing-copy">
+              <text class="map-missing-title">{{ event.locationName || event.title }}</text>
+              <text class="map-missing-meta">{{ eventTimeRange(event) }} · 未选择地图地点</text>
+            </view>
+            <button class="mini-action mini-action--secondary" @click="onEditEvent(event)">
+              选择地点
+            </button>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <!-- 准备好了吗？检查清单 -->
-    <view class="section">
+    <view v-if="!tripId || activeTripView === 'checklist'" class="section">
       <view class="section-head">
         <view class="section-icon">
           <CandyIcon name="check" />
@@ -474,11 +554,22 @@
                 </picker>
               </view>
             </view>
-            <input
-              class="candy-input modal-input"
-              v-model="eventForm.locationName"
-              placeholder="地点，例如：东京国立博物馆"
-            />
+            <view class="event-location-block">
+              <text class="modal-field-label">地点</text>
+              <view class="event-location-row">
+                <input
+                  class="candy-input modal-input event-location-input"
+                  v-model="eventForm.locationName"
+                  placeholder="地点，例如：东京国立博物馆"
+                />
+                <button class="mini-action mini-action--secondary event-location-button" @click="onChooseEventLocation">
+                  地图选择
+                </button>
+              </view>
+              <text class="event-location-status" :class="{ 'event-location-status--bound': hasEventCoordinates(eventForm) }">
+                {{ eventLocationStatusLabel }}
+              </text>
+            </view>
             <textarea
               class="note-input event-note-input"
               v-model="eventForm.note"
@@ -551,12 +642,14 @@ import {
   type AiTripEventCandidate,
 } from '../../services/ai-import'
 import { useAuthStore } from '../../stores/auth'
+import { buildTripMapData, hasEventCoordinates } from '../../utils/trip-map'
 
 const auth = useAuthStore()
 const tripId = ref<string>('')
 const trip = ref<TripDetail | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const tripEvents = ref<TripEvent[]>([])
+const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
 const members = ref<TripMember[]>([])
 const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
@@ -596,6 +689,9 @@ interface EventFormState {
   startTime: string
   endTime: string
   locationName: string
+  address: string
+  latitude: number | null
+  longitude: number | null
   note: string
 }
 
@@ -676,6 +772,9 @@ const eventForm = reactive<EventFormState>({
   startTime: '',
   endTime: '',
   locationName: '',
+  address: '',
+  latitude: null,
+  longitude: null,
   note: '',
 })
 
@@ -692,6 +791,14 @@ const eventGroups = computed(() => {
   })
   return [...groups.entries()].map(([date, events]) => ({ date, events }))
 })
+
+const tripMapData = computed(() => buildTripMapData(tripEvents.value))
+
+const eventLocationStatusLabel = computed(() => (
+  eventForm.latitude !== null && eventForm.longitude !== null
+    ? `已绑定地图位置${eventForm.address ? `：${eventForm.address}` : ''}`
+    : '未绑定地图位置'
+))
 
 const modes: Array<{ value: TransportMode; icon: string; label: string }> = [
   { value: 'flight', icon: 'plane', label: '飞机' },
@@ -1090,6 +1197,9 @@ const resetEventForm = () => {
   eventForm.startTime = ''
   eventForm.endTime = ''
   eventForm.locationName = ''
+  eventForm.address = ''
+  eventForm.latitude = null
+  eventForm.longitude = null
   eventForm.note = ''
 }
 
@@ -1273,6 +1383,9 @@ const onEditAiCandidate = (candidate: AiTripEventCandidate) => {
   eventForm.startTime = candidate.startAt && !eventForm.allDay ? formatEventTime(candidate.startAt) : ''
   eventForm.endTime = candidate.endAt && !eventForm.allDay ? formatEventTime(candidate.endAt) : ''
   eventForm.locationName = candidate.locationName || ''
+  eventForm.address = candidate.address || ''
+  eventForm.latitude = candidate.latitude
+  eventForm.longitude = candidate.longitude
   eventForm.note = candidate.note || ''
   eventAddOpen.value = true
 }
@@ -1289,6 +1402,9 @@ const updateAiCandidateFromEventForm = (clientId: string) => {
       startAt,
       endAt,
       locationName: eventForm.locationName.trim() || null,
+      address: eventForm.address.trim() || null,
+      latitude: eventForm.latitude,
+      longitude: eventForm.longitude,
       note: eventForm.note.trim() || null,
       meta: { ...candidate.meta, icon: eventForm.icon, allDay: eventForm.allDay },
       warnings: startAt ? warnings : [...warnings, '缺少开始时间'],
@@ -1326,8 +1442,28 @@ const onEditEvent = (event: TripEvent) => {
   eventForm.startTime = eventForm.allDay ? '' : formatEventTime(event.startAt)
   eventForm.endTime = eventForm.allDay ? '' : (event.endAt ? formatEventTime(event.endAt) : '')
   eventForm.locationName = event.locationName || ''
+  eventForm.address = event.address || ''
+  eventForm.latitude = event.latitude
+  eventForm.longitude = event.longitude
   eventForm.note = event.note || ''
   eventAddOpen.value = true
+}
+
+const onChooseEventLocation = () => {
+  uni.chooseLocation({
+    latitude: eventForm.latitude ?? undefined,
+    longitude: eventForm.longitude ?? undefined,
+    success: (res) => {
+      eventForm.locationName = res.name || eventForm.locationName
+      eventForm.address = res.address || eventForm.address
+      eventForm.latitude = Number(res.latitude)
+      eventForm.longitude = Number(res.longitude)
+    },
+    fail: (err) => {
+      if (String(err.errMsg || '').includes('cancel')) return
+      uni.showToast({ title: '暂时无法打开地图选择', icon: 'none' })
+    },
+  })
 }
 
 const onEventDateChange = (e: any) => {
@@ -1386,6 +1522,9 @@ const onEventAddSubmit = async () => {
         startAt,
         endAt,
         locationName: eventForm.locationName.trim() || null,
+        address: eventForm.address.trim() || null,
+        latitude: eventForm.latitude,
+        longitude: eventForm.longitude,
         note: eventForm.note.trim() || null,
         meta: { icon: eventForm.icon, allDay: isAllDay },
       })
@@ -1404,6 +1543,9 @@ const onEventAddSubmit = async () => {
       startAt,
       endAt,
       locationName: eventForm.locationName.trim() || null,
+      address: eventForm.address.trim() || null,
+      latitude: eventForm.latitude,
+      longitude: eventForm.longitude,
       note: eventForm.note.trim() || null,
       meta: { icon: eventForm.icon, allDay: isAllDay },
       status: 'confirmed',
@@ -2162,6 +2304,126 @@ const onAddSubmit = async () => {
 .editor-action-bar__delete[disabled] {
   opacity: 0.58;
   box-shadow: none;
+}
+
+.trip-view-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10rpx;
+  padding: 10rpx;
+  border-radius: $candy-radius-full;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: $candy-shadow-card;
+}
+.trip-view-tab {
+  min-width: 0;
+  height: 64rpx;
+  border-radius: $candy-radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.trip-view-tab--active {
+  background: $candy-primary;
+  color: $candy-on-primary;
+  box-shadow: 0 8rpx 22rpx rgba(224, 64, 160, 0.18);
+}
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  padding: 18rpx;
+}
+.route-map {
+  width: 100%;
+  height: 520rpx;
+  border-radius: $candy-radius-md;
+  overflow: hidden;
+}
+.map-empty {
+  min-height: 360rpx;
+}
+.map-route-list,
+.map-missing {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.map-route-row,
+.map-missing-row {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14rpx;
+  padding: 14rpx;
+  border-radius: $candy-radius-md;
+  background: $candy-surface-container-lowest;
+}
+.map-route-index {
+  flex: 0 0 46rpx;
+  width: 46rpx;
+  height: 46rpx;
+  line-height: 46rpx;
+  border-radius: 50%;
+  text-align: center;
+  background: $candy-primary;
+  color: $candy-on-primary;
+  font-size: 22rpx;
+  font-weight: 900;
+}
+.map-route-copy,
+.map-missing-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.map-route-title,
+.map-missing-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: $candy-on-surface;
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+}
+.map-route-meta,
+.map-missing-meta,
+.event-location-status {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+}
+.map-missing__title {
+  color: $candy-on-surface;
+  font-size: $candy-font-body-md;
+  font-weight: 800;
+}
+.event-location-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.event-location-row {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+.event-location-input {
+  flex: 1;
+}
+.event-location-button {
+  flex: 0 0 156rpx;
+}
+.event-location-status--bound {
+  color: $candy-primary;
+  font-weight: 700;
 }
 
 /* 添加检查项弹层 */
