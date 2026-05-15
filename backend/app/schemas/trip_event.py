@@ -45,15 +45,19 @@ class TripEventCreate(BaseModel):
         default=None, max_length=128, validation_alias="locationName"
     )
     address: str | None = Field(default=None, max_length=256)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     note: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
     status: EventStatus = EventStatus.confirmed
     sort_order: int = Field(default=0, validation_alias="sortOrder")
 
     @model_validator(mode="after")
-    def _check_range(self) -> "TripEventCreate":
+    def _check_values(self) -> "TripEventCreate":
         if self.end_at and self.end_at < self.start_at:
             raise ValueError("end_at must be >= start_at")
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("latitude and longitude must be provided together")
         return self
 
 
@@ -67,10 +71,25 @@ class TripEventPatch(BaseModel):
         default=None, max_length=128, validation_alias="locationName"
     )
     address: str | None = Field(default=None, max_length=256)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     note: str | None = None
     meta: dict[str, Any] | None = None
     status: EventStatus | None = None
     sort_order: int | None = Field(default=None, validation_alias="sortOrder")
+
+    @model_validator(mode="after")
+    def _check_coordinates(self) -> "TripEventPatch":
+        fields_set = self.model_fields_set
+        latitude_set = "latitude" in fields_set
+        longitude_set = "longitude" in fields_set
+        if latitude_set != longitude_set:
+            raise ValueError("latitude and longitude must be patched together")
+        if latitude_set and longitude_set and (self.latitude is None) != (
+            self.longitude is None
+        ):
+            raise ValueError("latitude and longitude must be provided together")
+        return self
 
 
 class TripEventOut(BaseModel):
@@ -84,6 +103,8 @@ class TripEventOut(BaseModel):
     end_at: datetime | None = Field(serialization_alias="endAt")
     location_name: str | None = Field(serialization_alias="locationName")
     address: str | None
+    latitude: float | None
+    longitude: float | None
     note: str | None
     meta: dict[str, Any]
     status: EventStatus

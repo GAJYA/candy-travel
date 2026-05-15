@@ -34,6 +34,8 @@ class AiTripEventCandidate(BaseModel):
         serialization_alias="locationName",
     )
     address: str | None = Field(default=None, max_length=256)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     note: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
     confidence: Confidence = "medium"
@@ -45,9 +47,11 @@ class AiTripEventCandidate(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _check_range(self) -> "AiTripEventCandidate":
+    def _check_values(self) -> "AiTripEventCandidate":
         if self.end_at is not None and self.start_at is not None and self.end_at < self.start_at:
             raise ValueError("end_at must be >= start_at")
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("latitude and longitude must be provided together")
         return self
 
 

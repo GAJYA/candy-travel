@@ -118,6 +118,8 @@ async def import_events(
             end_at=candidate.end_at,
             location_name=candidate.location_name,
             address=candidate.address,
+            latitude=candidate.latitude,
+            longitude=candidate.longitude,
             note=candidate.note,
             meta={
                 **candidate.meta,

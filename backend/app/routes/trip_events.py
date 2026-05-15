@@ -76,6 +76,8 @@ async def create_event(
         end_at=payload.end_at,
         location_name=payload.location_name,
         address=payload.address,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
         note=payload.note,
         meta=payload.meta or {},
         status=payload.status.value,

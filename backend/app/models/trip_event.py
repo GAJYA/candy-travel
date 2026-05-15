@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -48,6 +49,8 @@ class TripEvent(Base, TimestampMixin, SoftDeleteMixin):
     )
     location_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     address: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
@@ -78,6 +81,19 @@ class TripEvent(Base, TimestampMixin, SoftDeleteMixin):
         CheckConstraint(
             "end_at IS NULL OR end_at >= start_at",
             name="time_range",
+        ),
+        CheckConstraint(
+            "(latitude IS NULL AND longitude IS NULL) OR "
+            "(latitude IS NOT NULL AND longitude IS NOT NULL)",
+            name="ck_trip_events_coordinate_pair",
+        ),
+        CheckConstraint(
+            "latitude IS NULL OR (latitude >= -90 AND latitude <= 90)",
+            name="ck_trip_events_latitude_range",
+        ),
+        CheckConstraint(
+            "longitude IS NULL OR (longitude >= -180 AND longitude <= 180)",
+            name="ck_trip_events_longitude_range",
         ),
         Index("ix_trip_events_user_trip_start", "user_id", "trip_id", "start_at"),
         Index(
