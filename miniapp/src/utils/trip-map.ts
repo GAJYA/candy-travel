@@ -61,10 +61,16 @@ const eventLocationLabel = (event: TripEvent) => (
   event.locationName || event.title
 )
 
+const shouldPromptForMapLocation = (event: TripEvent) => (
+  Boolean(event.locationName?.trim()) || event.eventType === 'activity'
+)
+
 export const buildTripMapData = (events: TripEvent[]): TripMapData => {
   const sorted = sortTripEventsForMap(events)
   const mappableEvents = sorted.filter(hasEventCoordinates)
-  const missingLocationEvents = sorted.filter((event) => !hasEventCoordinates(event))
+  const missingLocationEvents = sorted.filter((event) => (
+    !hasEventCoordinates(event) && shouldPromptForMapLocation(event)
+  ))
   const includePoints = mappableEvents.map((event) => ({
     latitude: event.latitude as number,
     longitude: event.longitude as number,
