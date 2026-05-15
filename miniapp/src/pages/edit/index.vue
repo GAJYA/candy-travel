@@ -287,9 +287,14 @@
               <text class="map-missing-title">{{ event.locationName || event.title }}</text>
               <text class="map-missing-meta">{{ eventTimeRange(event) }} · 未选择地图地点</text>
             </view>
-            <button class="mini-action mini-action--secondary" @click="onEditEvent(event)">
+            <button
+              v-if="canEditEvent(event)"
+              class="mini-action mini-action--secondary"
+              @click="onEditEvent(event)"
+            >
               选择地点
             </button>
+            <text v-else class="map-missing-hint">暂不可在此选择地点</text>
           </view>
         </view>
       </view>
@@ -795,7 +800,7 @@ const eventGroups = computed(() => {
 const tripMapData = computed(() => buildTripMapData(tripEvents.value))
 
 const eventLocationStatusLabel = computed(() => (
-  eventForm.latitude !== null && eventForm.longitude !== null
+  hasEventCoordinates(eventForm)
     ? `已绑定地图位置${eventForm.address ? `：${eventForm.address}` : ''}`
     : '未绑定地图位置'
 ))
@@ -1454,10 +1459,16 @@ const onChooseEventLocation = () => {
     latitude: eventForm.latitude ?? undefined,
     longitude: eventForm.longitude ?? undefined,
     success: (res) => {
+      const latitude = Number(res.latitude)
+      const longitude = Number(res.longitude)
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        uni.showToast({ title: '地图地点坐标无效', icon: 'none' })
+        return
+      }
       eventForm.locationName = res.name || eventForm.locationName
       eventForm.address = res.address || eventForm.address
-      eventForm.latitude = Number(res.latitude)
-      eventForm.longitude = Number(res.longitude)
+      eventForm.latitude = latitude
+      eventForm.longitude = longitude
     },
     fail: (err) => {
       if (String(err.errMsg || '').includes('cancel')) return
@@ -2403,6 +2414,12 @@ const onAddSubmit = async () => {
   font-size: $candy-font-body-md;
   font-weight: 800;
 }
+.map-missing-hint {
+  flex: 0 0 auto;
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  font-weight: 700;
+}
 .event-location-block {
   display: flex;
   flex-direction: column;
@@ -2417,6 +2434,7 @@ const onAddSubmit = async () => {
 }
 .event-location-input {
   flex: 1;
+  min-width: 0;
 }
 .event-location-button {
   flex: 0 0 156rpx;
