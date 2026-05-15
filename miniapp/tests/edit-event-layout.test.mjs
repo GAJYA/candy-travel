@@ -32,20 +32,20 @@ test('event card grid item can shrink inside the timeline column', () => {
   )
 })
 
-test('map route list is collapsed behind a summary by default', () => {
+test('map route list scrolls vertically without a horizontal stop strip', () => {
   assert.match(
     source,
-    /showTripMapStops\s*=\s*ref\(false\)/,
-    'map route stops should not render as a full dense list by default',
+    /class="map-route-list-scroll"[\s\S]*scroll-y/,
+    'map route stops should live in a vertical scroll-view',
   )
-  assert.match(
+  assert.doesNotMatch(
     source,
-    /class="map-route-selected"/,
-    'map view should show one selected stop summary instead of only the full list',
+    /class="map-stop-strip"/,
+    'map view should not render a separate horizontal stop strip',
   )
-  assert.match(
+  assert.doesNotMatch(
     source,
-    /v-if="showTripMapStops"/,
-    'full map stop list should be explicitly expandable',
+    /showTripMapStops/,
+    'map route list should be directly scrollable instead of hidden behind a toggle',
   )
 })

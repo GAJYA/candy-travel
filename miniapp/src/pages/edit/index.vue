@@ -300,16 +300,12 @@
               {{ selectedTripMapEvent ? `${eventTimeRange(selectedTripMapEvent)} · ${selectedTripMapEvent.title}` : (tripMapData.hasDestinationFocus && tripMapData.focusMode === 'destination' ? '已隐藏长距离出发/返程段' : '当前显示完整路线') }}
             </text>
           </view>
-          <view class="map-route-actions">
+          <view v-if="selectedTripMapEvent" class="map-route-actions">
             <button
-              v-if="selectedTripMapEvent"
               class="map-route-ghost-action"
               @click="clearTripMapSelection"
             >
               总览
-            </button>
-            <button class="map-route-toggle" @click="showTripMapStops = !showTripMapStops">
-              {{ showTripMapStops ? '收起' : '列表' }}
             </button>
           </view>
         </view>
@@ -327,63 +323,50 @@
         </view>
 
         <scroll-view
-          v-if="tripMapData.mappableEvents.length"
-          class="map-stop-strip"
-          scroll-x
+          v-if="tripMapData.mappableEvents.length || tripMapData.missingLocationEvents.length"
+          class="map-route-list-scroll"
+          scroll-y
           :show-scrollbar="false"
         >
-          <view class="map-stop-strip__inner">
+          <view v-if="tripMapData.mappableEvents.length" class="map-route-list">
             <view
               v-for="(event, index) in tripMapData.mappableEvents"
               :key="event.id"
-              class="map-stop-chip"
-              :class="{ 'map-stop-chip--active': selectedTripMapEvent?.id === event.id }"
+              class="map-route-row"
+              :class="{ 'map-route-row--active': selectedTripMapEvent?.id === event.id }"
               @click="onSelectMapRouteEvent(event)"
             >
-              <text class="map-stop-chip__index">{{ index + 1 }}</text>
-              <text class="map-stop-chip__title">{{ event.locationName || event.title }}</text>
+              <text class="map-route-index">{{ index + 1 }}</text>
+              <view class="map-route-copy">
+                <text class="map-route-title">{{ event.locationName || event.title }}</text>
+                <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view v-if="tripMapData.missingLocationEvents.length" class="map-missing">
+            <text class="map-missing__title">未上地图</text>
+            <view
+              v-for="event in tripMapData.missingLocationEvents"
+              :key="event.id"
+              class="map-missing-row"
+            >
+              <view class="map-missing-copy">
+                <text class="map-missing-title">{{ event.locationName || event.title }}</text>
+                <text class="map-missing-meta">{{ eventTimeRange(event) }} · 未选择地图地点</text>
+              </view>
+              <button
+                v-if="canEditEvent(event)"
+                class="mini-action mini-action--secondary"
+                :disabled="locationSavingEventId === event.id"
+                @click="onChooseMissingEventLocation(event)"
+              >
+                {{ locationSavingEventId === event.id ? '保存中' : '选择地点' }}
+              </button>
+              <text v-else class="map-missing-hint">暂不可在此选择地点</text>
             </view>
           </view>
         </scroll-view>
-
-        <view v-if="showTripMapStops" class="map-route-list">
-          <view
-            v-for="(event, index) in tripMapData.mappableEvents"
-            :key="event.id"
-            class="map-route-row"
-            :class="{ 'map-route-row--active': selectedTripMapEvent?.id === event.id }"
-            @click="onSelectMapRouteEvent(event)"
-          >
-            <text class="map-route-index">{{ index + 1 }}</text>
-            <view class="map-route-copy">
-              <text class="map-route-title">{{ event.locationName || event.title }}</text>
-              <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
-            </view>
-          </view>
-        </view>
-
-        <view v-if="tripMapData.missingLocationEvents.length" class="map-missing">
-          <text class="map-missing__title">未上地图</text>
-          <view
-            v-for="event in tripMapData.missingLocationEvents"
-            :key="event.id"
-            class="map-missing-row"
-          >
-            <view class="map-missing-copy">
-              <text class="map-missing-title">{{ event.locationName || event.title }}</text>
-              <text class="map-missing-meta">{{ eventTimeRange(event) }} · 未选择地图地点</text>
-            </view>
-            <button
-              v-if="canEditEvent(event)"
-              class="mini-action mini-action--secondary"
-              :disabled="locationSavingEventId === event.id"
-              @click="onChooseMissingEventLocation(event)"
-            >
-              {{ locationSavingEventId === event.id ? '保存中' : '选择地点' }}
-            </button>
-            <text v-else class="map-missing-hint">暂不可在此选择地点</text>
-          </view>
-        </view>
       </view>
     </view>
 
@@ -815,7 +798,6 @@ const tripEvents = ref<TripEvent[]>([])
 const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
 const tripMapFocusMode = ref<TripMapFocusMode>('destination')
 const selectedTripMapEventId = ref<string>('')
-const showTripMapStops = ref(false)
 const members = ref<TripMember[]>([])
 const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
@@ -2843,18 +2825,6 @@ const onAddSubmit = async () => {
 .map-empty {
   min-height: 360rpx;
 }
-.map-route-toggle {
-  margin: 0;
-  min-width: 92rpx;
-  height: 46rpx;
-  line-height: 46rpx;
-  padding: 0 18rpx;
-  border-radius: $candy-radius-full;
-  background: $candy-primary;
-  color: $candy-on-primary;
-  font-size: 22rpx;
-  font-weight: 800;
-}
 .map-route-ghost-action {
   margin: 0;
   min-width: 92rpx;
@@ -2867,57 +2837,25 @@ const onAddSubmit = async () => {
   font-size: 22rpx;
   font-weight: 800;
 }
-.map-route-toggle::after,
 .map-route-ghost-action::after,
 .map-coordinate-action::after {
   border: 0;
 }
-.map-stop-strip {
+.map-route-list-scroll {
   width: 100%;
-  white-space: nowrap;
-}
-.map-stop-strip__inner {
-  display: flex;
-  flex-direction: row;
-  gap: 10rpx;
-  padding: 2rpx 0;
-}
-.map-stop-chip {
-  flex: 0 0 auto;
-  max-width: 220rpx;
-  height: 52rpx;
-  border-radius: $candy-radius-full;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8rpx;
-  padding: 0 16rpx 0 8rpx;
+  height: 430rpx;
+  box-sizing: border-box;
+  border-radius: $candy-radius-md;
   background: $candy-surface-container-lowest;
-  color: $candy-on-surface-variant;
 }
-.map-stop-chip--active {
-  background: $candy-primary-fixed;
-  color: $candy-primary;
+.map-route-list-scroll ::-webkit-scrollbar {
+  display: none;
 }
-.map-stop-chip__index {
-  flex: 0 0 34rpx;
-  width: 34rpx;
-  height: 34rpx;
-  line-height: 34rpx;
-  border-radius: 50%;
-  text-align: center;
-  background: $candy-primary;
-  color: $candy-on-primary;
-  font-size: 20rpx;
-  font-weight: 900;
-}
-.map-stop-chip__title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: $candy-font-label-md;
-  font-weight: 800;
+.map-route-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding: 12rpx;
 }
 .map-route-selected {
   min-width: 0;
@@ -2952,11 +2890,14 @@ const onAddSubmit = async () => {
   flex-direction: row;
   justify-content: flex-end;
 }
-.map-route-list,
 .map-missing {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 10rpx;
+  padding: 12rpx;
+}
+.map-route-list + .map-missing {
+  padding-top: 0;
 }
 .map-route-row,
 .map-missing-row {
