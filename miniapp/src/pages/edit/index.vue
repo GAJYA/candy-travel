@@ -247,6 +247,22 @@
         <text class="section-title">路线地图</text>
       </view>
       <view class="candy-card map-panel">
+        <view v-if="tripMapData.hasDestinationFocus" class="map-focus-tabs">
+          <view
+            class="map-focus-tab"
+            :class="{ 'map-focus-tab--active': tripMapData.focusMode === 'destination' }"
+            @click="tripMapFocusMode = 'destination'"
+          >
+            <text>目的地路线</text>
+          </view>
+          <view
+            class="map-focus-tab"
+            :class="{ 'map-focus-tab--active': tripMapData.focusMode === 'all' }"
+            @click="tripMapFocusMode = 'all'"
+          >
+            <text>全部路线</text>
+          </view>
+        </view>
         <map
           v-if="tripMapData.mappableEvents.length"
           class="route-map"
@@ -261,6 +277,9 @@
           <text class="empty-events__title">还没有可上地图的地点</text>
           <text class="empty-events__hint">添加事件后，用地图选择地点即可生成路线</text>
         </view>
+        <text v-if="tripMapData.hasDestinationFocus && tripMapData.focusMode === 'destination'" class="map-focus-hint">
+          已隐藏长距离出发段，切到全部路线可查看完整连线
+        </text>
 
         <view v-if="tripMapData.mappableEvents.length" class="map-route-list">
           <view
@@ -273,6 +292,14 @@
               <text class="map-route-title">{{ event.locationName || event.title }}</text>
               <text class="map-route-meta">{{ eventTimeRange(event) }} · {{ event.title }}</text>
             </view>
+            <button
+              v-if="canEditEvent(event)"
+              class="mini-action mini-action--secondary map-coordinate-action"
+              :disabled="locationSavingEventId === event.id"
+              @click="onClearEventCoordinates(event)"
+            >
+              {{ locationSavingEventId === event.id ? '处理中' : '移除坐标' }}
+            </button>
           </view>
         </view>
 
@@ -572,9 +599,18 @@
                   地图选择
                 </button>
               </view>
-              <text class="event-location-status" :class="{ 'event-location-status--bound': hasEventCoordinates(eventForm) }">
-                {{ eventLocationStatusLabel }}
-              </text>
+              <view class="event-location-status-row">
+                <text class="event-location-status" :class="{ 'event-location-status--bound': hasEventCoordinates(eventForm) }">
+                  {{ eventLocationStatusLabel }}
+                </text>
+                <button
+                  v-if="hasEventCoordinates(eventForm)"
+                  class="event-location-clear"
+                  @click="onClearEventFormCoordinates"
+                >
+                  清除坐标
+                </button>
+              </view>
             </view>
             <textarea
               class="note-input event-note-input"
@@ -710,7 +746,7 @@ import {
 } from '../../services/ai-import'
 import { placeSearchApi, type PlaceSuggestion } from '../../services/place-search'
 import { useAuthStore } from '../../stores/auth'
-import { buildTripMapData, hasEventCoordinates } from '../../utils/trip-map'
+import { buildTripMapData, hasEventCoordinates, type TripMapFocusMode } from '../../utils/trip-map'
 
 const auth = useAuthStore()
 const tripId = ref<string>('')
@@ -718,6 +754,7 @@ const trip = ref<TripDetail | null>(null)
 const checklistItems = ref<ChecklistItem[]>([])
 const tripEvents = ref<TripEvent[]>([])
 const activeTripView = ref<'schedule' | 'map' | 'checklist'>('schedule')
+const tripMapFocusMode = ref<TripMapFocusMode>('destination')
 const members = ref<TripMember[]>([])
 const otherMembers = computed(() => members.value.filter((member) => !isCurrentMember(member)))
 
@@ -879,7 +916,9 @@ const eventGroups = computed(() => {
   return [...groups.entries()].map(([date, events]) => ({ date, events }))
 })
 
-const tripMapData = computed(() => buildTripMapData(tripEvents.value))
+const tripMapData = computed(() => (
+  buildTripMapData(tripEvents.value, { focusMode: tripMapFocusMode.value })
+))
 
 const eventLocationStatusLabel = computed(() => (
   hasEventCoordinates(eventForm)
@@ -1700,6 +1739,52 @@ const applyPlaceSuggestionToForm = (place: PlaceSuggestion) => {
   placeSearchOpen.value = false
   placeSearchTarget.value = null
   placeSearchError.value = ''
+}
+
+const clearEventFormCoordinates = () => {
+  eventForm.address = ''
+  eventForm.latitude = null
+  eventForm.longitude = null
+}
+
+const onClearEventFormCoordinates = () => {
+  clearEventFormCoordinates()
+  uni.showToast({ title: '已清除坐标', icon: 'none' })
+}
+
+const clearEventCoordinates = async (event: TripEvent) => {
+  if (!canEditEvent(event) || locationSavingEventId.value) return
+  locationSavingEventId.value = event.id
+  try {
+    const updated = await tripEventApi.patch(event.id, {
+      address: null,
+      latitude: null,
+      longitude: null,
+    })
+    tripEvents.value = tripEvents.value.map((item) => (
+      item.id === updated.id ? updated : item
+    ))
+    uni.showToast({ title: '已移除坐标', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '移除坐标失败', icon: 'none' })
+  } finally {
+    if (locationSavingEventId.value === event.id) {
+      locationSavingEventId.value = ''
+    }
+  }
+}
+
+const onClearEventCoordinates = (event: TripEvent) => {
+  uni.showModal({
+    title: '移除地图坐标',
+    content: `保留「${event.locationName || event.title}」的地点文字，只移除地图坐标吗？`,
+    confirmText: '移除',
+    confirmColor: '#e040a0',
+    success: (res) => {
+      if (!res.confirm) return
+      void clearEventCoordinates(event)
+    },
+  })
 }
 
 const onSelectPlaceSuggestion = async (place: PlaceSuggestion) => {
@@ -2627,6 +2712,34 @@ const onAddSubmit = async () => {
   gap: 18rpx;
   padding: 18rpx;
 }
+.map-focus-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8rpx;
+  padding: 8rpx;
+  border-radius: $candy-radius-full;
+  background: $candy-surface-container-low;
+}
+.map-focus-tab {
+  min-width: 0;
+  height: 56rpx;
+  border-radius: $candy-radius-full;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  font-weight: 800;
+}
+.map-focus-tab--active {
+  background: $candy-primary;
+  color: $candy-on-primary;
+}
+.map-focus-hint {
+  color: $candy-on-surface-variant;
+  font-size: $candy-font-label-md;
+  line-height: 1.45;
+}
 .route-map {
   width: 100%;
   height: 520rpx;
@@ -2652,6 +2765,11 @@ const onAddSubmit = async () => {
   padding: 14rpx;
   border-radius: $candy-radius-md;
   background: $candy-surface-container-lowest;
+}
+.map-coordinate-action {
+  flex: 0 0 132rpx;
+  min-width: 132rpx;
+  padding: 0 14rpx;
 }
 .map-route-index {
   flex: 0 0 46rpx;
@@ -2718,9 +2836,35 @@ const onAddSubmit = async () => {
 .event-location-button {
   flex: 0 0 156rpx;
 }
+.event-location-status-row {
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+.event-location-status {
+  min-width: 0;
+  flex: 1;
+}
 .event-location-status--bound {
   color: $candy-primary;
   font-weight: 700;
+}
+.event-location-clear {
+  flex: 0 0 auto;
+  margin: 0;
+  height: 44rpx;
+  line-height: 44rpx;
+  padding: 0 16rpx;
+  border-radius: $candy-radius-full;
+  background: rgba(186, 26, 26, 0.08);
+  color: $candy-error;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+.event-location-clear::after {
+  border: none;
 }
 .modal--place-search {
   max-height: calc(82vh - env(safe-area-inset-bottom));

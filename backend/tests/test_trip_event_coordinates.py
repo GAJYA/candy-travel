@@ -169,6 +169,43 @@ async def test_patch_coordinates_updates_coordinates(client, coordinate_trip_see
 
 
 @pytest.mark.asyncio
+async def test_patch_coordinates_can_clear_coordinates(client, coordinate_trip_seed):
+    headers = auth_header(coordinate_trip_seed["owner_token"])
+    created = await client.post(
+        f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/events",
+        json={
+            "eventType": "activity",
+            "title": "上海出发",
+            "startAt": "2026-06-01T00:00:00Z",
+            "locationName": "上海虹桥站",
+            "address": "上海市闵行区",
+            "latitude": 31.19482,
+            "longitude": 121.32695,
+            "meta": {"icon": "train", "allDay": False},
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201
+
+    updated = await client.patch(
+        f"/api/v1/events/{created.json()['id']}",
+        json={
+            "address": None,
+            "latitude": None,
+            "longitude": None,
+        },
+        headers=headers,
+    )
+
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["locationName"] == "上海虹桥站"
+    assert body["address"] is None
+    assert body["latitude"] is None
+    assert body["longitude"] is None
+
+
+@pytest.mark.asyncio
 async def test_rejects_incomplete_or_out_of_range_coordinates(client, coordinate_trip_seed):
     headers = auth_header(coordinate_trip_seed["owner_token"])
 
