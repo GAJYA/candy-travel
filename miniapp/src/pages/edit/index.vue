@@ -290,9 +290,10 @@
             <button
               v-if="canEditEvent(event)"
               class="mini-action mini-action--secondary"
-              @click="onEditEvent(event)"
+              :disabled="locationSavingEventId === event.id"
+              @click="onChooseMissingEventLocation(event)"
             >
-              选择地点
+              {{ locationSavingEventId === event.id ? '保存中' : '选择地点' }}
             </button>
             <text v-else class="map-missing-hint">暂不可在此选择地点</text>
           </view>
@@ -672,6 +673,7 @@ const allowLeave = ref(false)
 const eventLoading = ref(false)
 const eventAddOpen = ref(false)
 const eventEditingId = ref<string>('')
+const locationSavingEventId = ref<string>('')
 const aiImportOpen = ref(false)
 const aiImportReviewOpen = ref(false)
 const aiImportLoading = ref(false)
@@ -698,6 +700,13 @@ interface EventFormState {
   latitude: number | null
   longitude: number | null
   note: string
+}
+
+interface ChosenTripLocation {
+  locationName: string
+  address: string
+  latitude: number
+  longitude: number
 }
 
 interface FormState {
@@ -1454,27 +1463,68 @@ const onEditEvent = (event: TripEvent) => {
   eventAddOpen.value = true
 }
 
-const onChooseEventLocation = () => {
-  uni.chooseLocation({
-    latitude: eventForm.latitude ?? undefined,
-    longitude: eventForm.longitude ?? undefined,
-    success: (res) => {
-      const latitude = Number(res.latitude)
-      const longitude = Number(res.longitude)
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        uni.showToast({ title: '地图地点坐标无效', icon: 'none' })
-        return
-      }
-      eventForm.locationName = res.name || eventForm.locationName
-      eventForm.address = res.address || eventForm.address
-      eventForm.latitude = latitude
-      eventForm.longitude = longitude
-    },
-    fail: (err) => {
-      if (String(err.errMsg || '').includes('cancel')) return
-      uni.showToast({ title: '暂时无法打开地图选择', icon: 'none' })
-    },
+const chooseTripLocation = (seed?: Pick<EventFormState, 'latitude' | 'longitude'>): Promise<ChosenTripLocation | null> => (
+  new Promise((resolve) => {
+    uni.chooseLocation({
+      latitude: seed?.latitude ?? undefined,
+      longitude: seed?.longitude ?? undefined,
+      success: (res) => {
+        const latitude = Number(res.latitude)
+        const longitude = Number(res.longitude)
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          uni.showToast({ title: '地图地点坐标无效', icon: 'none' })
+          resolve(null)
+          return
+        }
+        resolve({
+          locationName: res.name || '',
+          address: res.address || '',
+          latitude,
+          longitude,
+        })
+      },
+      fail: (err) => {
+        if (!String(err.errMsg || '').includes('cancel')) {
+          uni.showToast({ title: '暂时无法打开地图选择', icon: 'none' })
+        }
+        resolve(null)
+      },
+    })
   })
+)
+
+const onChooseEventLocation = async () => {
+  const location = await chooseTripLocation(eventForm)
+  if (!location) return
+  eventForm.locationName = location.locationName || eventForm.locationName
+  eventForm.address = location.address || eventForm.address
+  eventForm.latitude = location.latitude
+  eventForm.longitude = location.longitude
+}
+
+const onChooseMissingEventLocation = async (event: TripEvent) => {
+  if (!canEditEvent(event) || locationSavingEventId.value) return
+  const location = await chooseTripLocation(event)
+  if (!location) return
+  locationSavingEventId.value = event.id
+  try {
+    const updated = await tripEventApi.patch(event.id, {
+      locationName: location.locationName || event.locationName,
+      address: location.address || event.address,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    })
+    tripEvents.value = tripEvents.value.map((item) => (
+      item.id === updated.id ? updated : item
+    ))
+    uni.showToast({ title: '已保存地点', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '保存地点失败', icon: 'none' })
+  } finally {
+    if (locationSavingEventId.value === event.id) {
+      locationSavingEventId.value = ''
+    }
+  }
 }
 
 const onEventDateChange = (e: any) => {
