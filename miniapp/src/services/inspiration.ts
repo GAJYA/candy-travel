@@ -1,4 +1,5 @@
 import { request } from './api'
+import type { AiTripEventCandidate } from './ai-import'
 
 export type InspirationType = 'short' | 'long'
 export type InspirationStatus = 'idea' | 'planned'
@@ -37,10 +38,20 @@ export interface InspirationFromSharePayload {
   type?: InspirationType
 }
 
+export interface InspirationShareDraft {
+  destination: string
+  sourceUrl: string | null
+  note: string | null
+  planDetail: string | null
+  events: AiTripEventCandidate[]
+}
+
 export const inspirationApi = {
   list: () => request<Inspiration[]>('/inspirations'),
   create: (payload: InspirationCreatePayload) =>
     request<Inspiration>('/inspirations', { method: 'POST', data: payload }),
+  extractFromShare: (payload: InspirationFromSharePayload) =>
+    request<InspirationShareDraft>('/inspirations/from-share/preview', { method: 'POST', data: payload }),
   createFromShare: (payload: InspirationFromSharePayload) =>
     request<Inspiration>('/inspirations/from-share', { method: 'POST', data: payload }),
   patch: (id: string, payload: InspirationPatchPayload) =>

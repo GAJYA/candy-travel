@@ -193,6 +193,7 @@ import type { Trip } from '../../services/trip'
 import { tripEventApi, type TripEvent } from '../../services/trip-event'
 import { useAuthStore } from '../../stores/auth'
 import { useTripStore } from '../../stores/trip'
+import { sortTripsForDisplay } from '../../utils/trip-sort'
 
 interface CalendarCell {
   date: string
@@ -273,9 +274,7 @@ const legacyIconMap: Record<string, string> = {
   '📌': 'pin',
 }
 
-const sortedTrips = computed(() =>
-  [...trip.list].sort((a, b) => dateSortValue(a) - dateSortValue(b)),
-)
+const sortedTrips = computed(() => sortTripsForDisplay(trip.list))
 
 const subtitle = computed(() => {
   if (!auth.isAuthenticated) return '按日期查看下一段安排'
@@ -572,11 +571,6 @@ function createEventItem(event: TripEvent, parentTrip?: Trip | null): ScheduleIt
     tone: 'event',
     sort: new Date(event.startAt).getTime(),
   }
-}
-
-const dateSortValue = (item: Trip) => {
-  if (!item.startDate) return Number.MAX_SAFE_INTEGER
-  return parseDate(item.startDate).getTime()
 }
 
 const isUpcomingTrip = (item: Trip) => {

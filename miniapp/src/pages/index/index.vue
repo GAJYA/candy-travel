@@ -160,6 +160,7 @@ import CandyBottomNav from '../../components/CandyBottomNav.vue'
 import { tripApi, type Trip } from '../../services/trip'
 import { useAuthStore } from '../../stores/auth'
 import { useTripStore } from '../../stores/trip'
+import { sortTripsForDisplay } from '../../utils/trip-sort'
 
 const auth = useAuthStore()
 const trip = useTripStore()
@@ -175,9 +176,7 @@ const subtitle = computed(() => {
   return `共 ${trip.list.length} 段旅程`
 })
 
-const sortedTrips = computed(() =>
-  [...trip.list].sort((a, b) => dateSortValue(a) - dateSortValue(b)),
-)
+const sortedTrips = computed(() => sortTripsForDisplay(trip.list))
 
 const nextTrip = computed(() =>
   sortedTrips.value.find((t) => isUpcomingTrip(t)) || null,
@@ -207,11 +206,6 @@ const statusLabel = (t: Trip): string => {
     canceled: '已取消',
     archived: '已归档',
   }[t.status])
-}
-
-const dateSortValue = (t: Trip) => {
-  if (!t.startDate) return Number.MAX_SAFE_INTEGER
-  return new Date(`${t.startDate}T00:00:00`).getTime()
 }
 
 const isUpcomingTrip = (t: Trip) => {

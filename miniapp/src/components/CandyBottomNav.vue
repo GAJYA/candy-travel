@@ -38,7 +38,7 @@ const props = defineProps<{
 const items: NavItem[] = [
   { key: 'home', icon: 'home', label: '首页', url: '/pages/index/index' },
   { key: 'calendar', icon: 'calendar', label: '日历', url: '/pages/calendar/index' },
-  { key: 'ai', icon: 'ai', label: 'AI助手', disabled: true },
+  { key: 'ai', icon: 'ai', label: 'AI助手', url: '/pages/ai/index' },
   { key: 'profile', icon: 'user', label: '我的', url: '/pages/profile/index' },
 ]
 

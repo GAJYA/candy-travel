@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.ai_import import AiTripEventCandidate
+
 
 class InspirationType(StrEnum):
     short = "short"
@@ -83,6 +85,16 @@ class InspirationFromShareIn(BaseModel):
     @classmethod
     def _strip_shared_text(cls, value: str) -> str:
         return value.strip() if isinstance(value, str) else value
+
+
+class InspirationShareDraftOut(BaseModel):
+    model_config = _camel_config
+
+    destination: str
+    note: str | None
+    plan_detail: str | None = Field(serialization_alias="planDetail")
+    source_url: str | None = Field(serialization_alias="sourceUrl")
+    events: list[AiTripEventCandidate] = Field(default_factory=list)
 
 
 class InspirationOut(BaseModel):
