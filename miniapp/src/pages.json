@@ -17,9 +17,9 @@
 			}
 		},
 		{
-			"path": "pages/ai/index",
+			"path": "pages/import/index",
 			"style": {
-				"navigationBarTitleText": "AI助手",
+				"navigationBarTitleText": "一键导入",
 				"navigationBarBackgroundColor": "#fff7fb",
 				"backgroundColor": "#fff7fb"
 			}

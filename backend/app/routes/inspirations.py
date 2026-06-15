@@ -9,7 +9,6 @@ from sqlalchemy import select
 
 from app.deps import CurrentUser, SessionDep
 from app.models import TravelInspiration
-from app.schemas.ai_import import AiTripEventCandidate
 from app.schemas.inspiration import (
     InspirationCreate,
     InspirationFromShareIn,
@@ -17,6 +16,7 @@ from app.schemas.inspiration import (
     InspirationPatch,
     InspirationShareDraftOut,
 )
+from app.schemas.quick_import import QuickTripEventCandidate
 from app.services.ai_client import AiClient, AiClientError
 from app.services.xiaohongshu_client import (
     XiaohongshuClient,
@@ -65,7 +65,7 @@ def _string_or_none(value: object, max_length: int | None = None) -> str | None:
     return text[:max_length] if max_length else text
 
 
-def _event_candidate_from_ai(raw: object, index: int) -> AiTripEventCandidate | None:
+def _event_candidate_from_raw(raw: object, index: int) -> QuickTripEventCandidate | None:
     if not isinstance(raw, dict):
         return None
 
@@ -120,7 +120,7 @@ def _event_candidate_from_ai(raw: object, index: int) -> AiTripEventCandidate | 
     }
 
     try:
-        return AiTripEventCandidate.model_validate(event_data)
+        return QuickTripEventCandidate.model_validate(event_data)
     except ValidationError:
         event_data["startAt"] = None
         event_data["endAt"] = None
@@ -128,24 +128,24 @@ def _event_candidate_from_ai(raw: object, index: int) -> AiTripEventCandidate | 
             event_data["latitude"] = None
             event_data["longitude"] = None
         try:
-            return AiTripEventCandidate.model_validate(event_data)
+            return QuickTripEventCandidate.model_validate(event_data)
         except ValidationError:
             return None
 
 
-def _parse_ai_events(data: dict[str, object]) -> list[AiTripEventCandidate]:
+def _parse_plan_events(data: dict[str, object]) -> list[QuickTripEventCandidate]:
     raw_events = data.get("events")
     if not isinstance(raw_events, list):
         return []
-    events: list[AiTripEventCandidate] = []
+    events: list[QuickTripEventCandidate] = []
     for index, raw_event in enumerate(raw_events[:30], start=1):
-        candidate = _event_candidate_from_ai(raw_event, index)
+        candidate = _event_candidate_from_raw(raw_event, index)
         if candidate is not None:
             events.append(candidate)
     return events
 
 
-def _parse_ai_json(content: str) -> dict[str, object]:
+def _parse_plan_json(content: str) -> dict[str, object]:
     text = content.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -157,14 +157,14 @@ def _parse_ai_json(content: str) -> dict[str, object]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise AiClientError("AI response was not valid JSON") from e
+        raise AiClientError("import service response was not valid JSON") from e
     if not isinstance(data, dict):
-        raise AiClientError("AI response JSON must be an object")
+        raise AiClientError("import service response JSON must be an object")
     return {
         "destination": str(data.get("destination") or "").strip(),
         "note": str(data.get("note") or "").strip(),
         "planDetail": str(data.get("planDetail") or "").strip(),
-        "events": _parse_ai_events(data),
+        "events": _parse_plan_events(data),
     }
 
 
@@ -201,9 +201,11 @@ JSON 字段：
 用户内容：
 {shared_content[:8000]}
 """.strip()
-    result = _parse_ai_json(await AiClient().complete_text(prompt=prompt))
+    result = _parse_plan_json(
+        await AiClient(timeout_seconds=45).complete_text(prompt=prompt)
+    )
     if not result["destination"]:
-        raise AiClientError("AI response missing destination")
+        raise AiClientError("import service response missing destination")
     return result
 
 
@@ -214,6 +216,8 @@ async def _extract_share_draft(shared_text: str) -> tuple[dict[str, object], str
     except AiClientError as e:
         detail = str(e)
         status_code = 504 if "timed out" in detail else 502
+        if status_code == 504:
+            detail = "整理耗时过长，请稍后重试"
         raise HTTPException(status_code=status_code, detail=detail) from e
 
 

@@ -4,19 +4,19 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.ai_import import AiTripEventCandidate
+from app.schemas.quick_import import QuickTripEventCandidate
 from app.services.ai_client import AiClientError
-from app.services.ai_trip_event_extractor import (
-    AiExtractionError,
+from app.services.event_import_extractor import (
+    ImportExtractionError,
     build_trip_event_prompt,
     extract_trip_events,
-    parse_ai_event_response,
+    parse_event_response,
     sanitize_sensitive_text,
 )
 
 
 def test_candidate_accepts_transport_payload():
-    candidate = AiTripEventCandidate.model_validate(
+    candidate = QuickTripEventCandidate.model_validate(
         {
             "clientId": "tmp_1",
             "eventType": "transport",
@@ -44,7 +44,7 @@ def test_candidate_accepts_transport_payload():
 
 def test_candidate_rejects_invalid_event_type():
     with pytest.raises(ValidationError):
-        AiTripEventCandidate.model_validate(
+        QuickTripEventCandidate.model_validate(
             {
                 "clientId": "tmp_1",
                 "eventType": "invoice",
@@ -57,7 +57,7 @@ def test_candidate_rejects_invalid_event_type():
         )
 
 
-def test_parse_ai_event_response_returns_candidates():
+def test_parse_event_response_returns_candidates():
     content = json.dumps(
         {
             "events": [
@@ -79,7 +79,7 @@ def test_parse_ai_event_response_returns_candidates():
         ensure_ascii=False,
     )
 
-    events, warnings = parse_ai_event_response(content)
+    events, warnings = parse_event_response(content)
 
     assert warnings == []
     assert events[0].client_id == "tmp_1"
@@ -87,9 +87,9 @@ def test_parse_ai_event_response_returns_candidates():
     assert events[0].meta["icon"] == "hotel"
 
 
-def test_parse_ai_event_response_rejects_non_json():
-    with pytest.raises(AiExtractionError, match="AI returned invalid JSON"):
-        parse_ai_event_response("```json\n{}\n```")
+def test_parse_event_response_rejects_non_json():
+    with pytest.raises(ImportExtractionError, match="import service returned invalid JSON"):
+        parse_event_response("```json\n{}\n```")
 
 
 def test_sanitize_sensitive_text_masks_personal_data():
@@ -121,7 +121,7 @@ def test_build_trip_event_prompt_contains_trip_context():
 @pytest.mark.asyncio
 async def test_extract_trip_events_downgrades_empty_ai_content(monkeypatch):
     async def fake_describe_images(self, *, prompt, images):
-        raise AiClientError("AI response missing message content")
+        raise AiClientError("import service response missing message content")
 
     monkeypatch.setattr("app.services.ai_client.AiClient.describe_images", fake_describe_images)
     trip = SimpleNamespace(
@@ -138,4 +138,4 @@ async def test_extract_trip_events_downgrades_empty_ai_content(monkeypatch):
 
     assert model == "gpt-5.5"
     assert events == []
-    assert warnings == ["AI 未返回可解析内容，请换一张更清晰的订单截图后重试。"]
+    assert warnings == ["未返回可解析内容，请换一张更清晰的订单截图后重试。"]

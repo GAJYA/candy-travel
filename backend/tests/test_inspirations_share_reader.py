@@ -1,9 +1,11 @@
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
 from app.routes import inspirations
 from app.schemas.inspiration import InspirationFromShareIn
+from app.services.ai_client import AiClientError
 from app.services.xiaohongshu_client import XiaohongshuNoteContent
 
 WILLER_SHARE_TEXT = """
@@ -42,8 +44,8 @@ async def test_read_shared_content_uses_xiaohongshu_client(monkeypatch) -> None:
     assert closed is True
 
 
-def test_parse_ai_json_extracts_place_events() -> None:
-    parsed = inspirations._parse_ai_json(
+def test_parse_plan_json_extracts_place_events() -> None:
+    parsed = inspirations._parse_plan_json(
         """
         {
           "destination": "云南",
@@ -72,6 +74,47 @@ def test_parse_ai_json_extracts_place_events() -> None:
     assert parsed["events"][0].meta["dayOffset"] == 1
     assert parsed["events"][1].title == "洱海骑行"
     assert parsed["events"][1].confidence == "high"
+
+
+@pytest.mark.asyncio
+async def test_extract_inspiration_plan_uses_short_timeout(monkeypatch) -> None:
+    captured_timeout = None
+
+    class FakeAiClient:
+        def __init__(self, *, timeout_seconds: int | None = None) -> None:
+            nonlocal captured_timeout
+            captured_timeout = timeout_seconds
+
+        async def complete_text(self, *, prompt: str) -> str:
+            assert "旅行计划整理助手" in prompt
+            return '{"destination":"云南","note":"徒步路线","planDetail":"路线整理","events":[]}'
+
+    monkeypatch.setattr(inspirations, "AiClient", FakeAiClient)
+
+    result = await inspirations._extract_inspiration_plan("旅行分享")
+
+    assert captured_timeout == 45
+    assert result["destination"] == "云南"
+
+
+@pytest.mark.asyncio
+async def test_extract_share_draft_returns_readable_timeout(monkeypatch) -> None:
+    async def fake_read_shared_content(shared_text: str) -> tuple[str, str | None]:
+        return shared_text, None
+
+    async def fake_extract_inspiration_plan(shared_content: str) -> dict[str, object]:
+        raise AiClientError("import service request timed out")
+
+    monkeypatch.setattr(inspirations, "_read_shared_content", fake_read_shared_content)
+    monkeypatch.setattr(
+        inspirations, "_extract_inspiration_plan", fake_extract_inspiration_plan
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await inspirations._extract_share_draft("旅行分享")
+
+    assert exc_info.value.status_code == 504
+    assert exc_info.value.detail == "整理耗时过长，请稍后重试"
 
 
 @pytest.mark.asyncio

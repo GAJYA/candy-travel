@@ -2,7 +2,7 @@ import { request } from './api'
 
 export type TripEventType = 'transport' | 'stay' | 'activity' | 'reminder'
 export type TripEventStatus = 'draft' | 'confirmed' | 'canceled'
-export type TripEventSource = 'manual' | 'ai_extracted'
+export type TripEventSource = string
 
 export interface TripEvent {
   id: string

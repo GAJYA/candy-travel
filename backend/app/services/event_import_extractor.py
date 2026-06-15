@@ -9,12 +9,12 @@ from pydantic import ValidationError
 
 from app.config import settings
 from app.models import Trip
-from app.schemas.ai_import import AiTripEventCandidate
+from app.schemas.quick_import import QuickTripEventCandidate
 from app.services.ai_client import AiClient, AiClientError
 
 
-class AiExtractionError(Exception):
-    """Raised when the AI response cannot be converted into trip event candidates."""
+class ImportExtractionError(Exception):
+    """Raised when the import service response cannot be converted into trip event candidates."""
 
 
 _PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
@@ -82,36 +82,36 @@ def build_trip_event_prompt(
 """.strip()
 
 
-def parse_ai_event_response(content: str) -> tuple[list[AiTripEventCandidate], list[str]]:
+def parse_event_response(content: str) -> tuple[list[QuickTripEventCandidate], list[str]]:
     try:
         payload = json.loads(content)
     except json.JSONDecodeError as e:
-        raise AiExtractionError("AI returned invalid JSON") from e
+        raise ImportExtractionError("import service returned invalid JSON") from e
 
     if not isinstance(payload, dict):
-        raise AiExtractionError("AI response must be a JSON object")
+        raise ImportExtractionError("import service response must be a JSON object")
 
     raw_events = payload.get("events")
     if not isinstance(raw_events, list):
-        raise AiExtractionError("AI response missing events list")
+        raise ImportExtractionError("import service response missing events list")
 
-    events: list[AiTripEventCandidate] = []
+    events: list[QuickTripEventCandidate] = []
     for index, raw_event in enumerate(raw_events, start=1):
         if not isinstance(raw_event, dict):
-            raise AiExtractionError("AI event must be a JSON object")
+            raise ImportExtractionError("import event must be a JSON object")
         event_data: dict[str, Any] = {
             **raw_event,
             "clientId": raw_event.get("clientId") or f"tmp_{index}",
             "note": sanitize_sensitive_text(raw_event.get("note")),
         }
         try:
-            events.append(AiTripEventCandidate.model_validate(event_data))
+            events.append(QuickTripEventCandidate.model_validate(event_data))
         except ValidationError as e:
-            raise AiExtractionError(f"AI event {index} failed validation") from e
+            raise ImportExtractionError(f"import event {index} failed validation") from e
 
     warnings = payload.get("warnings") or []
     if not isinstance(warnings, list):
-        warnings = ["AI returned warnings in an invalid format"]
+        warnings = ["import service returned warnings in an invalid format"]
     return events, [str(item) for item in warnings]
 
 
@@ -120,7 +120,7 @@ async def extract_trip_events(
     trip: Trip,
     images: list[tuple[bytes, str]],
     client_timezone: str | None = None,
-) -> tuple[list[AiTripEventCandidate], list[str], str]:
+) -> tuple[list[QuickTripEventCandidate], list[str], str]:
     timezone = client_timezone or trip.timezone or "Asia/Shanghai"
     prompt = build_trip_event_prompt(
         trip_title=trip.title,
@@ -133,7 +133,7 @@ async def extract_trip_events(
         content = await client.describe_images(prompt=prompt, images=images)
     except AiClientError as e:
         if "missing message content" in str(e):
-            return [], ["AI 未返回可解析内容，请换一张更清晰的订单截图后重试。"], client.model
+            return [], ["未返回可解析内容，请换一张更清晰的订单截图后重试。"], client.model
         raise
-    events, warnings = parse_ai_event_response(content)
+    events, warnings = parse_event_response(content)
     return events, warnings, client.model

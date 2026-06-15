@@ -94,7 +94,7 @@
             class="wishlist-note wishlist-share"
             v-model="sharedPostText"
             maxlength="1200"
-            placeholder="粘贴小红书帖子链接或分享文案，我会帮你整理成一份大概计划"
+            placeholder="粘贴旅行分享链接或分享文案，我会帮你整理成一份大概计划"
             auto-height
           />
           <view class="wishlist-row">
@@ -106,7 +106,7 @@
               保存
             </button>
             <button
-              class="wishlist-add wishlist-add--ai"
+              class="wishlist-add wishlist-add--quick"
               :disabled="!canExtractShare || extractingShare"
               @click="createFromSharedPost"
             >
@@ -621,7 +621,7 @@ onShow(bootstrap)
   opacity: 0.48;
   box-shadow: none;
 }
-.wishlist-add--ai {
+.wishlist-add--quick {
   background: $candy-on-surface;
   color: $candy-inverse-on-surface;
   box-shadow: $candy-shadow-secondary;

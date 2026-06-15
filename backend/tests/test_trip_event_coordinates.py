@@ -252,11 +252,11 @@ async def test_rejects_incomplete_or_out_of_range_coordinates(client, coordinate
 
 
 @pytest.mark.asyncio
-async def test_ai_import_events_can_persist_coordinates(client, coordinate_trip_seed):
+async def test_quick_import_events_can_persist_coordinates(client, coordinate_trip_seed):
     headers = auth_header(coordinate_trip_seed["owner_token"])
 
     response = await client.post(
-        f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/ai/import-events",
+        f"/api/v1/trips/{coordinate_trip_seed['trip_id']}/quick-import/import-events",
         json={
             "events": [
                 {

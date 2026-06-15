@@ -11,7 +11,7 @@ Confidence = Literal["high", "medium", "low"]
 _camel = ConfigDict(populate_by_name=True)
 
 
-class AiTripEventCandidate(BaseModel):
+class QuickTripEventCandidate(BaseModel):
     model_config = _camel
 
     client_id: str = Field(validation_alias="clientId", serialization_alias="clientId")
@@ -47,7 +47,7 @@ class AiTripEventCandidate(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _check_values(self) -> "AiTripEventCandidate":
+    def _check_values(self) -> "QuickTripEventCandidate":
         if self.end_at is not None and self.start_at is not None and self.end_at < self.start_at:
             raise ValueError("end_at must be >= start_at")
         if (self.latitude is None) != (self.longitude is None):
@@ -55,16 +55,16 @@ class AiTripEventCandidate(BaseModel):
         return self
 
 
-class AiExtractEventsResponse(BaseModel):
+class QuickExtractEventsResponse(BaseModel):
     model_config = _camel
 
     trip_id: UUID = Field(serialization_alias="tripId")
     model: str
-    events: list[AiTripEventCandidate]
+    events: list[QuickTripEventCandidate]
     warnings: list[str] = Field(default_factory=list)
 
 
-class AiImportEventsIn(BaseModel):
+class QuickImportEventsIn(BaseModel):
     model_config = _camel
 
-    events: list[AiTripEventCandidate] = Field(min_length=1, max_length=30)
+    events: list[QuickTripEventCandidate] = Field(min_length=1, max_length=30)

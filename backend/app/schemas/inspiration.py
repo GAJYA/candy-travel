@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.ai_import import AiTripEventCandidate
+from app.schemas.quick_import import QuickTripEventCandidate
 
 
 class InspirationType(StrEnum):
@@ -94,7 +94,7 @@ class InspirationShareDraftOut(BaseModel):
     note: str | None
     plan_detail: str | None = Field(serialization_alias="planDetail")
     source_url: str | None = Field(serialization_alias="sourceUrl")
-    events: list[AiTripEventCandidate] = Field(default_factory=list)
+    events: list[QuickTripEventCandidate] = Field(default_factory=list)
 
 
 class InspirationOut(BaseModel):

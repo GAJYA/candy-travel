@@ -2,19 +2,19 @@
   <view class="page">
     <view class="topbar">
       <view>
-        <text class="brand">AI助手</text>
-        <text class="subtitle">小红书行程生成</text>
+        <text class="brand">一键导入</text>
+        <text class="subtitle">分享内容转行程</text>
       </view>
       <view class="topbar-mark">
-        <CandyIcon name="ai" />
+        <CandyIcon name="sparkle" />
       </view>
     </view>
 
     <view v-if="!auth.isAuthenticated" class="candy-card login-card">
       <view class="login-mark">
-        <CandyIcon name="ai" />
+        <CandyIcon name="sparkle" />
       </view>
-      <text class="login-title">登录后使用 AI 助手</text>
+      <text class="login-title">登录后使用一键导入</text>
       <text class="login-hint">生成的行程会保存到你的旅行列表</text>
       <button class="candy-btn candy-btn--primary login-btn" :disabled="auth.loading" @click="login">
         {{ auth.loading ? '登录中...' : '微信登录' }}
@@ -22,15 +22,15 @@
       <text v-if="auth.error" class="candy-text-error login-error">{{ auth.error }}</text>
     </view>
 
-    <view v-else class="ai-workspace">
+    <view v-else class="import-workspace">
       <view class="candy-card generator-card">
         <view class="field-block">
-          <text class="field-label">小红书分享</text>
+          <text class="field-label">旅行分享</text>
           <textarea
             class="share-input"
             v-model="shareText"
             maxlength="4096"
-            placeholder="粘贴小红书分享链接或分享文案"
+            placeholder="粘贴旅行分享链接或分享文案"
             auto-height
           />
         </view>
@@ -56,7 +56,7 @@
           :disabled="!canGenerate"
           @click="onGenerateTrip"
         >
-          {{ generating ? '生成中...' : '生成行程' }}
+          {{ generating ? '整理中...' : '一键导入' }}
         </button>
 
         <text v-if="errorMessage" class="candy-text-error error-copy">{{ errorMessage }}</text>
@@ -74,18 +74,22 @@
       </view>
     </view>
 
-    <CandyBottomNav active="ai" />
+    <CandyBottomNav active="import" />
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 
 import CandyBottomNav from '../../components/CandyBottomNav.vue'
 import CandyIcon from '../../components/CandyIcon.vue'
-import { aiImportApi, type AiTripEventCandidate } from '../../services/ai-import'
-import { inspirationApi, type InspirationShareDraft } from '../../services/inspiration'
+import { quickImportApi, type QuickTripEventCandidate } from '../../services/quick-import'
+import {
+  inspirationApi,
+  type InspirationImportJob,
+  type InspirationShareDraft,
+} from '../../services/inspiration'
 import { tripApi, type Trip } from '../../services/trip'
 import { useAuthStore } from '../../stores/auth'
 
@@ -97,9 +101,14 @@ const generating = ref(false)
 const errorMessage = ref('')
 const lastTrip = ref<Trip | null>(null)
 const lastEventCount = ref(0)
+const currentJobId = ref('')
+const pollCount = ref(0)
+const pollingTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
+const IMPORT_JOB_POLL_INTERVAL_MS = 2500
+const IMPORT_JOB_MAX_POLLS = 60
 const shareEventTimes = ['09:00', '11:00', '14:00', '16:00', '19:00']
-const shareEventIcons: Record<AiTripEventCandidate['eventType'], string> = {
+const shareEventIcons: Record<QuickTripEventCandidate['eventType'], string> = {
   transport: 'plane',
   stay: 'hotel',
   activity: 'pin',
@@ -140,7 +149,7 @@ const onEndDateChange = (e: any) => {
 
 const buildTripTitle = (inspiration: InspirationShareDraft) => {
   const destination = inspiration.destination.trim()
-  return destination ? `${destination}旅行` : 'AI生成行程'
+  return destination ? `${destination}旅行` : '导入行程'
 }
 
 const buildTripNote = (inspiration: InspirationShareDraft) => {
@@ -191,11 +200,11 @@ const buildIsoDateTime = (date: string, time: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
 }
 
-const normalizeShareEventCandidates = (events: AiTripEventCandidate[]) => {
+const normalizeShareEventCandidates = (events: QuickTripEventCandidate[]) => {
   const sortedEvents = [...events].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
   const rangeDays = dateRangeDays()
   const total = Math.max(sortedEvents.length, 1)
-  const normalized: AiTripEventCandidate[] = []
+  const normalized: QuickTripEventCandidate[] = []
 
   sortedEvents.forEach((candidate, index) => {
     const meta = candidate.meta || {}
@@ -209,7 +218,7 @@ const normalizeShareEventCandidates = (events: AiTripEventCandidate[]) => {
 
     normalized.push({
       ...candidate,
-      clientId: candidate.clientId || `xhs_${index + 1}`,
+      clientId: candidate.clientId || `share_${index + 1}`,
       title,
       startAt,
       endAt: candidate.endAt || null,
@@ -232,27 +241,29 @@ const normalizeShareEventCandidates = (events: AiTripEventCandidate[]) => {
 }
 
 const validateInput = () => {
-  if (!shareText.value.trim()) return '先粘贴小红书分享链接'
+  if (!shareText.value.trim()) return '先粘贴旅行分享链接'
   if (!startDate.value || !endDate.value) return '请选择起止日期'
   if (startDate.value > endDate.value) return '结束日期不能早于开始日期'
   return ''
 }
 
-const onGenerateTrip = async () => {
-  const validationError = validateInput()
-  if (validationError) {
-    uni.showToast({ title: validationError, icon: 'none' })
-    return
+const clearImportJobPolling = () => {
+  if (pollingTimer.value) {
+    clearTimeout(pollingTimer.value)
+    pollingTimer.value = null
   }
+}
 
-  generating.value = true
-  errorMessage.value = ''
-  lastEventCount.value = 0
+const failImportJob = (message: string) => {
+  clearImportJobPolling()
+  currentJobId.value = ''
+  generating.value = false
+  errorMessage.value = message
+  uni.showToast({ title: '整理失败', icon: 'none' })
+}
+
+const createTripFromShareDraft = async (inspiration: InspirationShareDraft) => {
   try {
-    const inspiration = await inspirationApi.extractFromShare({
-      sharedText: shareText.value.trim(),
-      type: 'long',
-    })
     const trip = await tripApi.create({
       title: buildTripTitle(inspiration),
       destinationCity: inspiration.destination || undefined,
@@ -266,7 +277,7 @@ const onGenerateTrip = async () => {
     let eventImportFailed = false
     if (eventCandidates.length) {
       try {
-        await aiImportApi.importTripEvents(trip.id, eventCandidates)
+        await quickImportApi.importTripEvents(trip.id, eventCandidates)
         lastEventCount.value = eventCandidates.length
       } catch (e) {
         eventImportFailed = true
@@ -279,14 +290,87 @@ const onGenerateTrip = async () => {
     uni.showToast({
       title: eventImportFailed
         ? '地点导入失败'
-        : (lastEventCount.value ? '已生成地点' : '已生成行程'),
+        : (lastEventCount.value ? '已导入地点' : '已创建行程'),
       icon: eventImportFailed ? 'none' : 'success',
     })
     uni.navigateTo({ url: `/pages/edit/index?id=${trip.id}` })
+    currentJobId.value = ''
+    generating.value = false
   } catch (e) {
-    errorMessage.value = e instanceof Error ? e.message : '生成失败，稍后再试'
-    uni.showToast({ title: '生成失败', icon: 'none' })
-  } finally {
+    failImportJob(e instanceof Error ? e.message : '整理失败，稍后再试')
+  }
+}
+
+const scheduleImportJobPolling = () => {
+  clearImportJobPolling()
+  if (pollCount.value >= IMPORT_JOB_MAX_POLLS) {
+    failImportJob('整理耗时较长，请稍后重试')
+    return
+  }
+  pollingTimer.value = setTimeout(() => {
+    void pollImportJob()
+  }, IMPORT_JOB_POLL_INTERVAL_MS)
+}
+
+const handleImportJob = async (job: InspirationImportJob) => {
+  if (job.id !== currentJobId.value) return
+
+  if (job.status === 'succeeded') {
+    clearImportJobPolling()
+    if (!job.result) {
+      failImportJob('整理结果为空，请重新导入')
+      return
+    }
+    await createTripFromShareDraft(job.result)
+    return
+  }
+
+  if (job.status === 'failed' || job.status === 'expired') {
+    failImportJob(job.errorMessage || '整理失败，稍后再试')
+    return
+  }
+
+  scheduleImportJobPolling()
+}
+
+const pollImportJob = async () => {
+  if (!currentJobId.value) return
+  if (pollCount.value >= IMPORT_JOB_MAX_POLLS) {
+    failImportJob('整理耗时较长，请稍后重试')
+    return
+  }
+
+  pollCount.value += 1
+  try {
+    const job = await inspirationApi.getImportJob(currentJobId.value)
+    await handleImportJob(job)
+  } catch (e) {
+    failImportJob(e instanceof Error ? e.message : '整理失败，稍后再试')
+  }
+}
+
+const onGenerateTrip = async () => {
+  const validationError = validateInput()
+  if (validationError) {
+    uni.showToast({ title: validationError, icon: 'none' })
+    return
+  }
+
+  clearImportJobPolling()
+  generating.value = true
+  errorMessage.value = ''
+  lastEventCount.value = 0
+  currentJobId.value = ''
+  pollCount.value = 0
+  try {
+    const job = await inspirationApi.createShareImportJob({
+      sharedText: shareText.value.trim(),
+      type: 'long',
+    })
+    currentJobId.value = job.id
+    await handleImportJob(job)
+  } catch (e) {
+    failImportJob(e instanceof Error ? e.message : '整理失败，稍后再试')
     generating.value = false
   }
 }
@@ -311,6 +395,7 @@ const formatGeneratedTripMeta = (trip: Trip) => {
 
 onMounted(refreshAuth)
 onShow(refreshAuth)
+onUnmounted(clearImportJobPolling)
 </script>
 
 <style lang="scss">
@@ -409,7 +494,7 @@ onShow(refreshAuth)
   width: 100%;
 }
 
-.ai-workspace {
+.import-workspace {
   display: flex;
   flex-direction: column;
   gap: $candy-space-md;

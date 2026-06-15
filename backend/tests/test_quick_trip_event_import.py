@@ -9,16 +9,16 @@ from sqlalchemy import delete, select
 from app.db import SessionLocal
 from app.main import app
 from app.models import Trip, TripEvent, TripMember, User
-from app.schemas.ai_import import AiTripEventCandidate
+from app.schemas.quick_import import QuickTripEventCandidate
 from app.services.jwt_service import issue_token
 
 
 @pytest_asyncio.fixture
-async def ai_trip_seed():
+async def quick_trip_seed():
     async with SessionLocal() as session:
         suffix = uuid4().hex
-        owner = User(openid=f"ai-owner-{suffix}", nickname=f"AI Owner {suffix[:6]}")
-        stranger = User(openid=f"ai-stranger-{suffix}", nickname=f"AI Stranger {suffix[:6]}")
+        owner = User(openid=f"quick-owner-{suffix}", nickname=f"Quick Owner {suffix[:6]}")
+        stranger = User(openid=f"quick-stranger-{suffix}", nickname=f"Quick Stranger {suffix[:6]}")
         session.add_all([owner, stranger])
         await session.flush()
 
@@ -64,18 +64,20 @@ def auth_header(token: str) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_extract_events_requires_auth(client, ai_trip_seed):
-    response = await client.post(f"/api/v1/trips/{ai_trip_seed['trip_id']}/ai/extract-events")
+async def test_extract_events_requires_auth(client, quick_trip_seed):
+    response = await client.post(
+        f"/api/v1/trips/{quick_trip_seed['trip_id']}/quick-import/extract-events"
+    )
 
     assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_extract_events_rejects_non_image(client, ai_trip_seed):
+async def test_extract_events_rejects_non_image(client, quick_trip_seed):
     response = await client.post(
-        f"/api/v1/trips/{ai_trip_seed['trip_id']}/ai/extract-events",
+        f"/api/v1/trips/{quick_trip_seed['trip_id']}/quick-import/extract-events",
         files={"images": ("order.txt", b"not image", "text/plain")},
-        headers=auth_header(ai_trip_seed["owner_token"]),
+        headers=auth_header(quick_trip_seed["owner_token"]),
     )
 
     assert response.status_code == 400
@@ -83,25 +85,25 @@ async def test_extract_events_rejects_non_image(client, ai_trip_seed):
 
 
 @pytest.mark.asyncio
-async def test_extract_events_rejects_inaccessible_trip(client, ai_trip_seed):
+async def test_extract_events_rejects_inaccessible_trip(client, quick_trip_seed):
     response = await client.post(
-        f"/api/v1/trips/{ai_trip_seed['trip_id']}/ai/extract-events",
+        f"/api/v1/trips/{quick_trip_seed['trip_id']}/quick-import/extract-events",
         files={"images": ("order.png", b"png bytes", "image/png")},
-        headers=auth_header(ai_trip_seed["stranger_token"]),
+        headers=auth_header(quick_trip_seed["stranger_token"]),
     )
 
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_extract_events_uses_service(monkeypatch, client, ai_trip_seed):
+async def test_extract_events_uses_service(monkeypatch, client, quick_trip_seed):
     async def fake_extract_trip_events(*, trip, images, client_timezone=None):
-        assert trip.id == ai_trip_seed["trip_id"]
+        assert trip.id == quick_trip_seed["trip_id"]
         assert images == [(b"png bytes", "image/png")]
         assert client_timezone is None
         return (
             [
-                AiTripEventCandidate.model_validate(
+                QuickTripEventCandidate.model_validate(
                     {
                         "clientId": "tmp_1",
                         "eventType": "transport",
@@ -119,12 +121,12 @@ async def test_extract_events_uses_service(monkeypatch, client, ai_trip_seed):
             "gpt-5.5",
         )
 
-    monkeypatch.setattr("app.routes.ai_import.extract_trip_events", fake_extract_trip_events)
+    monkeypatch.setattr("app.routes.quick_import.extract_trip_events", fake_extract_trip_events)
 
     response = await client.post(
-        f"/api/v1/trips/{ai_trip_seed['trip_id']}/ai/extract-events",
+        f"/api/v1/trips/{quick_trip_seed['trip_id']}/quick-import/extract-events",
         files={"images": ("order.png", b"png bytes", "image/png")},
-        headers=auth_header(ai_trip_seed["owner_token"]),
+        headers=auth_header(quick_trip_seed["owner_token"]),
     )
 
     assert response.status_code == 200
@@ -134,9 +136,9 @@ async def test_extract_events_uses_service(monkeypatch, client, ai_trip_seed):
 
 
 @pytest.mark.asyncio
-async def test_import_events_creates_ai_extracted_events(client, ai_trip_seed):
+async def test_import_events_creates_extracted_events(client, quick_trip_seed):
     response = await client.post(
-        f"/api/v1/trips/{ai_trip_seed['trip_id']}/ai/import-events",
+        f"/api/v1/trips/{quick_trip_seed['trip_id']}/quick-import/import-events",
         json={
             "events": [
                 {
@@ -155,7 +157,7 @@ async def test_import_events_creates_ai_extracted_events(client, ai_trip_seed):
                 }
             ]
         },
-        headers=auth_header(ai_trip_seed["owner_token"]),
+        headers=auth_header(quick_trip_seed["owner_token"]),
     )
 
     assert response.status_code == 201

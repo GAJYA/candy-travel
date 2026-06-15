@@ -1,5 +1,6 @@
 from app.models.base import Base
 from app.models.checklist import ChecklistItem, ChecklistTemplate
+from app.models.import_job import ImportJob
 from app.models.inspiration import TravelInspiration
 from app.models.trip import Trip
 from app.models.trip_event import TripEvent
@@ -11,6 +12,7 @@ __all__ = [
     "Base",
     "ChecklistItem",
     "ChecklistTemplate",
+    "ImportJob",
     "Trip",
     "TripEvent",
     "TripInvite",

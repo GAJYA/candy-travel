@@ -8,13 +8,13 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from app.config import settings
 from app.deps import CurrentUser, SessionDep
 from app.models import TripEvent
-from app.schemas.ai_import import AiExtractEventsResponse, AiImportEventsIn
+from app.schemas.quick_import import QuickExtractEventsResponse, QuickImportEventsIn
 from app.schemas.trip_event import TripEventOut
 from app.services.ai_client import AiClientError
-from app.services.ai_trip_event_extractor import AiExtractionError, extract_trip_events
+from app.services.event_import_extractor import ImportExtractionError, extract_trip_events
 from app.services.trip_access import get_accessible_trip
 
-router = APIRouter(tags=["ai-import"])
+router = APIRouter(tags=["quick-import"])
 
 SUPPORTED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
@@ -52,8 +52,8 @@ async def _read_images(files: list[UploadFile]) -> list[tuple[bytes, str]]:
 
 
 @router.post(
-    "/trips/{trip_id}/ai/extract-events",
-    response_model=AiExtractEventsResponse,
+    "/trips/{trip_id}/quick-import/extract-events",
+    response_model=QuickExtractEventsResponse,
     response_model_by_alias=True,
 )
 async def extract_events(
@@ -62,7 +62,7 @@ async def extract_events(
     session: SessionDep,
     images: Annotated[list[UploadFile], File()],
     client_timezone: Annotated[str | None, Form(alias="clientTimezone")] = None,
-) -> AiExtractEventsResponse:
+) -> QuickExtractEventsResponse:
     trip = await get_accessible_trip(session, user_id=user.id, trip_id=trip_id)
     if trip is None:
         raise HTTPException(status_code=404, detail="trip not found")
@@ -74,14 +74,14 @@ async def extract_events(
             images=image_payloads,
             client_timezone=client_timezone,
         )
-    except AiExtractionError as e:
+    except ImportExtractionError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
     except AiClientError as e:
         detail = str(e)
         status_code = 504 if "timed out" in detail else 502
         raise HTTPException(status_code=status_code, detail=detail) from e
 
-    return AiExtractEventsResponse(
+    return QuickExtractEventsResponse(
         trip_id=trip.id,
         model=model,
         events=events,
@@ -90,14 +90,14 @@ async def extract_events(
 
 
 @router.post(
-    "/trips/{trip_id}/ai/import-events",
+    "/trips/{trip_id}/quick-import/import-events",
     response_model=list[TripEventOut],
     response_model_by_alias=True,
     status_code=201,
 )
 async def import_events(
     trip_id: UUID,
-    payload: AiImportEventsIn,
+    payload: QuickImportEventsIn,
     user: CurrentUser,
     session: SessionDep,
 ) -> list[TripEventOut]:
@@ -123,7 +123,7 @@ async def import_events(
             note=candidate.note,
             meta={
                 **candidate.meta,
-                "ai": {
+                "import": {
                     "clientId": candidate.client_id,
                     "confidence": candidate.confidence,
                     "warnings": candidate.warnings,

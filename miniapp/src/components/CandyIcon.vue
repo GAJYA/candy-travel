@@ -81,7 +81,6 @@ const safeName = computed(() => props.name.replace(/[^a-z0-9-]/gi, '') || 'pin')
   right: 32%;
 }
 
-.candy-icon--ai .candy-icon__part--a,
 .candy-icon--sparkle .candy-icon__part--a {
   left: 44%;
   top: 10%;
@@ -90,7 +89,6 @@ const safeName = computed(() => props.name.replace(/[^a-z0-9-]/gi, '') || 'pin')
   border-radius: 1em;
   background: currentColor;
 }
-.candy-icon--ai .candy-icon__part--b,
 .candy-icon--sparkle .candy-icon__part--b {
   left: 12%;
   top: 42%;
@@ -99,7 +97,6 @@ const safeName = computed(() => props.name.replace(/[^a-z0-9-]/gi, '') || 'pin')
   border-radius: 1em;
   background: currentColor;
 }
-.candy-icon--ai .candy-icon__part--c,
 .candy-icon--sparkle .candy-icon__part--c {
   right: 4%;
   top: 4%;
@@ -108,7 +105,6 @@ const safeName = computed(() => props.name.replace(/[^a-z0-9-]/gi, '') || 'pin')
   border-radius: 50%;
   background: currentColor;
 }
-.candy-icon--ai .candy-icon__part--d,
 .candy-icon--sparkle .candy-icon__part--d {
   left: 5%;
   bottom: 6%;

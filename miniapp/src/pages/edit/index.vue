@@ -176,9 +176,9 @@
           <button
             class="mini-action mini-action--secondary"
             :disabled="!tripId"
-            @click="onShowAiImport"
+            @click="onShowQuickImport"
           >
-            AI导入
+            一键导入
           </button>
           <button
             class="mini-action"
@@ -483,55 +483,55 @@
       </view>
     </view>
 
-    <!-- AI 补充行程弹层 -->
-    <view v-if="aiImportOpen" class="modal-mask" @click="onCloseAiImport">
+    <!-- 一键补充行程弹层 -->
+    <view v-if="quickImportOpen" class="modal-mask" @click="onCloseQuickImport">
       <view class="modal" @click.stop>
-        <text class="modal-title">AI 补充行程</text>
-        <view class="ai-import-card">
-          <view class="ai-import-card__icon">
+        <text class="modal-title">一键补充行程</text>
+        <view class="quick-import-card">
+          <view class="quick-import-card__icon">
             <CandyIcon name="sparkle" />
           </view>
-          <view class="ai-import-card__copy">
-            <text class="ai-import-card__title">上传订单截图</text>
-            <text class="ai-import-card__hint">支持飞机、高铁、酒店订单截图。图片仅用于本次识别，不会保存。</text>
+          <view class="quick-import-card__copy">
+            <text class="quick-import-card__title">上传订单截图</text>
+            <text class="quick-import-card__hint">支持飞机、高铁、酒店订单截图。图片仅用于本次识别，不会保存。</text>
           </view>
         </view>
-        <view v-if="aiImportLoading" class="ai-import-status">
-          <view class="ai-import-spinner" />
-          <view class="ai-import-status__copy">
-            <text class="ai-import-status__title">{{ aiImportStatusTitle }}</text>
-            <text class="ai-import-status__hint">{{ aiImportStatusHint }}</text>
-            <view class="ai-import-progress">
-              <view class="ai-import-progress__bar" :style="{ width: `${aiImportProgressPercent}%` }" />
+        <view v-if="quickImportLoading" class="quick-import-status">
+          <view class="quick-import-spinner" />
+          <view class="quick-import-status__copy">
+            <text class="quick-import-status__title">{{ quickImportStatusTitle }}</text>
+            <text class="quick-import-status__hint">{{ quickImportStatusHint }}</text>
+            <view class="quick-import-progress">
+              <view class="quick-import-progress__bar" :style="{ width: `${quickImportProgressPercent}%` }" />
             </view>
           </view>
         </view>
         <view class="modal-actions">
-          <button class="candy-btn candy-btn--ghost" @click="onCloseAiImport">
-            {{ aiImportLoading ? '取消识别' : '取消' }}
+          <button class="candy-btn candy-btn--ghost" @click="onCloseQuickImport">
+            {{ quickImportLoading ? '取消识别' : '取消' }}
           </button>
-          <button class="candy-btn candy-btn--primary" :disabled="aiImportLoading" @click="onChooseAiImportImages">
-            {{ aiImportLoading ? '识别中…' : '选择截图' }}
+          <button class="candy-btn candy-btn--primary" :disabled="quickImportLoading" @click="onChooseQuickImportImages">
+            {{ quickImportLoading ? '识别中…' : '选择截图' }}
           </button>
         </view>
       </view>
     </view>
 
-    <!-- AI 候选事件审核弹层 -->
-    <view v-if="aiImportReviewOpen" class="modal-mask" @click="aiImportReviewOpen = false">
-      <view class="modal modal--event modal--ai-review" @click.stop>
-        <text class="modal-title">识别到 {{ aiImportCandidates.length }} 个行程事件</text>
-        <view v-if="aiImportWarnings.length" class="ai-warning-list">
-          <text v-for="warning in aiImportWarnings" :key="warning" class="candy-text-error">{{ warning }}</text>
+    <!-- 导入事件审核弹层 -->
+    <view v-if="quickImportReviewOpen" class="modal-mask" @click="quickImportReviewOpen = false">
+      <view class="modal modal--event modal--quick-review" @click.stop>
+        <text class="modal-title">识别到 {{ quickImportCandidates.length }} 个行程事件</text>
+        <view v-if="quickImportWarnings.length" class="quick-warning-list">
+          <text v-for="warning in quickImportWarnings" :key="warning" class="candy-text-error">{{ warning }}</text>
         </view>
-        <scroll-view class="event-modal-scroll ai-review-scroll" scroll-y :show-scrollbar="false">
-          <view class="ai-candidate-list">
-            <view v-for="candidate in aiImportCandidates" :key="candidate.clientId" class="ai-candidate-card">
-              <view class="ai-candidate-card__head">
+        <scroll-view class="event-modal-scroll quick-review-scroll" scroll-y :show-scrollbar="false">
+          <view class="quick-candidate-list">
+            <view v-for="candidate in quickImportCandidates" :key="candidate.clientId" class="quick-candidate-card">
+              <view class="quick-candidate-card__head">
                 <view class="event-icon-badge">
                   <CandyIcon :name="normalizeIconName(candidate.meta?.icon, 'sparkle')" />
                 </view>
-                <view class="ai-candidate-card__copy">
+                <view class="quick-candidate-card__copy">
                   <text class="event-title">{{ candidate.title }}</text>
                   <text class="event-meta">{{ candidateTimeLabel(candidate) }}</text>
                   <text v-if="candidate.locationName" class="event-meta">地点：{{ candidate.locationName }}</text>
@@ -539,17 +539,17 @@
                   <text v-if="candidate.warnings.length" class="candy-text-error">{{ candidate.warnings.join('；') }}</text>
                 </view>
               </view>
-              <view class="ai-candidate-card__actions">
-                <button class="mini-action mini-action--secondary" @click="onEditAiCandidate(candidate)">编辑</button>
-                <button class="mini-action mini-action--secondary" @click="onRemoveAiCandidate(candidate.clientId)">移除</button>
+              <view class="quick-candidate-card__actions">
+                <button class="mini-action mini-action--secondary" @click="onEditQuickCandidate(candidate)">编辑</button>
+                <button class="mini-action mini-action--secondary" @click="onRemoveQuickCandidate(candidate.clientId)">移除</button>
               </view>
             </view>
           </view>
         </scroll-view>
         <view class="modal-actions">
-          <button class="candy-btn candy-btn--ghost" :disabled="aiImportLoading" @click="aiImportReviewOpen = false">取消</button>
-          <button class="candy-btn candy-btn--primary" :disabled="!canSaveAiCandidates || aiImportLoading" @click="onSaveAiCandidates">
-            {{ aiImportLoading ? '保存中…' : '保存到行程' }}
+          <button class="candy-btn candy-btn--ghost" :disabled="quickImportLoading" @click="quickImportReviewOpen = false">取消</button>
+          <button class="candy-btn candy-btn--primary" :disabled="!canSaveQuickCandidates || quickImportLoading" @click="onSaveQuickCandidates">
+            {{ quickImportLoading ? '保存中…' : '保存到行程' }}
           </button>
         </view>
       </view>
@@ -787,11 +787,11 @@ import {
   type TripEvent,
 } from '../../services/trip-event'
 import {
-  aiImportApi,
-  type AiImportPhase,
-  type AiImportUploadTask,
-  type AiTripEventCandidate,
-} from '../../services/ai-import'
+  quickImportApi,
+  type QuickImportPhase,
+  type QuickImportUploadTask,
+  type QuickTripEventCandidate,
+} from '../../services/quick-import'
 import { placeSearchApi, type PlaceSuggestion } from '../../services/place-search'
 import { useAuthStore } from '../../stores/auth'
 import { buildTripMapData, hasEventCoordinates, type TripMapFocusMode } from '../../utils/trip-map'
@@ -838,19 +838,19 @@ const placeSearchKeyword = ref('')
 const placeSearchResults = ref<PlaceSuggestion[]>([])
 const placeSearchError = ref('')
 const placeSearchTarget = ref<PlaceSearchTarget | null>(null)
-const aiImportOpen = ref(false)
-const aiImportReviewOpen = ref(false)
-const aiImportLoading = ref(false)
-const aiImportCandidates = ref<AiTripEventCandidate[]>([])
-const aiImportWarnings = ref<string[]>([])
-const aiImportElapsedSeconds = ref(0)
-const aiImportUploadProgress = ref(0)
-const aiImportCurrentImage = ref(0)
-const aiImportTotalImages = ref(0)
-const aiImportPhase = ref<AiImportPhase>('uploading')
-const aiImportTask = ref<AiImportUploadTask | null>(null)
-let aiImportTimer: ReturnType<typeof setInterval> | null = null
-let aiImportRunId = 0
+const quickImportOpen = ref(false)
+const quickImportReviewOpen = ref(false)
+const quickImportLoading = ref(false)
+const quickImportCandidates = ref<QuickTripEventCandidate[]>([])
+const quickImportWarnings = ref<string[]>([])
+const quickImportElapsedSeconds = ref(0)
+const quickImportUploadProgress = ref(0)
+const quickImportCurrentImage = ref(0)
+const quickImportTotalImages = ref(0)
+const quickImportPhase = ref<QuickImportPhase>('uploading')
+const quickImportTask = ref<QuickImportUploadTask | null>(null)
+let quickImportTimer: ReturnType<typeof setInterval> | null = null
+let quickImportRunId = 0
 
 interface EventFormState {
   icon: string
@@ -1023,29 +1023,29 @@ const tripDateSummary = computed(() => {
   return '日期未定'
 })
 
-const aiImportProgressPercent = computed(() => {
-  if (!aiImportLoading.value) return 0
-  if (aiImportPhase.value === 'uploading') return Math.max(8, aiImportUploadProgress.value)
-  if (aiImportElapsedSeconds.value < 20) return 72
-  if (aiImportElapsedSeconds.value < 60) return 84
-  if (aiImportElapsedSeconds.value < 100) return 92
+const quickImportProgressPercent = computed(() => {
+  if (!quickImportLoading.value) return 0
+  if (quickImportPhase.value === 'uploading') return Math.max(8, quickImportUploadProgress.value)
+  if (quickImportElapsedSeconds.value < 20) return 72
+  if (quickImportElapsedSeconds.value < 60) return 84
+  if (quickImportElapsedSeconds.value < 100) return 92
   return 96
 })
 
-const aiImportStatusTitle = computed(() => (
-  aiImportPhase.value === 'uploading' ? '正在上传截图' : 'AI 正在识别订单'
+const quickImportStatusTitle = computed(() => (
+  quickImportPhase.value === 'uploading' ? '正在上传截图' : '正在整理订单'
 ))
 
-const aiImportStatusHint = computed(() => {
-  if (aiImportPhase.value === 'uploading') {
-    const current = aiImportCurrentImage.value || 1
-    const total = aiImportTotalImages.value || 1
-    return `正在上传第 ${current}/${total} 张，已完成 ${aiImportUploadProgress.value}%`
+const quickImportStatusHint = computed(() => {
+  if (quickImportPhase.value === 'uploading') {
+    const current = quickImportCurrentImage.value || 1
+    const total = quickImportTotalImages.value || 1
+    return `正在上传第 ${current}/${total} 张，已完成 ${quickImportUploadProgress.value}%`
   }
-  if (aiImportElapsedSeconds.value >= 90) {
-    return `已等待 ${aiImportElapsedSeconds.value} 秒，复杂截图会更久；可以继续等待或取消后重试`
+  if (quickImportElapsedSeconds.value >= 90) {
+    return `已等待 ${quickImportElapsedSeconds.value} 秒，复杂截图会更久；可以继续等待或取消后重试`
   }
-  return `已等待 ${aiImportElapsedSeconds.value} 秒，通常需要 20-60 秒`
+  return `已等待 ${quickImportElapsedSeconds.value} 秒，通常需要 20-60 秒`
 })
 
 onLoad((opts?: Record<string, string | undefined>) => {
@@ -1072,8 +1072,8 @@ onBackPress(() => {
 })
 
 onUnload(() => {
-  stopAiImportTimer()
-  aiImportTask.value?.abort()
+  stopQuickImportTimer()
+  quickImportTask.value?.abort()
 })
 
 const load = async () => {
@@ -1524,7 +1524,7 @@ const onShowEventAdd = async () => {
   eventAddOpen.value = true
 }
 
-const onShowAiImport = async () => {
+const onShowQuickImport = async () => {
   if (!tripId.value) {
     uni.showToast({ title: '请先保存行程', icon: 'none' })
     return
@@ -1533,45 +1533,45 @@ const onShowAiImport = async () => {
     uni.showToast({ title: '请先保存当前行程', icon: 'none' })
     return
   }
-  aiImportOpen.value = true
+  quickImportOpen.value = true
 }
 
-const startAiImportTimer = () => {
-  stopAiImportTimer()
-  aiImportElapsedSeconds.value = 0
-  aiImportTimer = setInterval(() => {
-    aiImportElapsedSeconds.value += 1
+const startQuickImportTimer = () => {
+  stopQuickImportTimer()
+  quickImportElapsedSeconds.value = 0
+  quickImportTimer = setInterval(() => {
+    quickImportElapsedSeconds.value += 1
   }, 1000)
 }
 
-const stopAiImportTimer = () => {
-  if (aiImportTimer) {
-    clearInterval(aiImportTimer)
-    aiImportTimer = null
+const stopQuickImportTimer = () => {
+  if (quickImportTimer) {
+    clearInterval(quickImportTimer)
+    quickImportTimer = null
   }
 }
 
-const resetAiImportProgress = (total: number) => {
-  aiImportPhase.value = 'uploading'
-  aiImportUploadProgress.value = 0
-  aiImportCurrentImage.value = total > 0 ? 1 : 0
-  aiImportTotalImages.value = total
+const resetQuickImportProgress = (total: number) => {
+  quickImportPhase.value = 'uploading'
+  quickImportUploadProgress.value = 0
+  quickImportCurrentImage.value = total > 0 ? 1 : 0
+  quickImportTotalImages.value = total
 }
 
-const onCloseAiImport = () => {
-  if (!aiImportLoading.value) {
-    aiImportOpen.value = false
+const onCloseQuickImport = () => {
+  if (!quickImportLoading.value) {
+    quickImportOpen.value = false
     return
   }
-  aiImportRunId += 1
-  aiImportTask.value?.abort()
-  aiImportTask.value = null
-  aiImportLoading.value = false
-  stopAiImportTimer()
+  quickImportRunId += 1
+  quickImportTask.value?.abort()
+  quickImportTask.value = null
+  quickImportLoading.value = false
+  stopQuickImportTimer()
   uni.showToast({ title: '已取消识别', icon: 'none' })
 }
 
-const showAiImportError = (message: string) => {
+const showQuickImportError = (message: string) => {
   if (message.includes('uploadFile 合法域名') || message.length > 28) {
     uni.showModal({
       title: '识别失败',
@@ -1585,8 +1585,8 @@ const showAiImportError = (message: string) => {
   uni.showToast({ title: message || '识别失败', icon: 'none' })
 }
 
-const onChooseAiImportImages = () => {
-  if (aiImportLoading.value) return
+const onChooseQuickImportImages = () => {
+  if (quickImportLoading.value) return
   uni.chooseImage({
     count: 6,
     sizeType: ['compressed'],
@@ -1595,53 +1595,53 @@ const onChooseAiImportImages = () => {
       const rawPaths = res.tempFilePaths || []
       const paths = Array.isArray(rawPaths) ? rawPaths : [rawPaths]
       if (!paths.length) return
-      void extractAiImportImages(paths)
+      void extractQuickImportImages(paths)
     },
   })
 }
 
-const extractAiImportImages = async (paths: string[]) => {
-  const runId = aiImportRunId + 1
-  aiImportRunId = runId
-  aiImportLoading.value = true
-  resetAiImportProgress(paths.length)
-  startAiImportTimer()
+const extractQuickImportImages = async (paths: string[]) => {
+  const runId = quickImportRunId + 1
+  quickImportRunId = runId
+  quickImportLoading.value = true
+  resetQuickImportProgress(paths.length)
+  startQuickImportTimer()
   try {
-    const result = await aiImportApi.extractTripEvents(tripId.value, paths, {
+    const result = await quickImportApi.extractTripEvents(tripId.value, paths, {
       timeoutMs: 150000,
       onUploadTask: (task) => {
-        if (runId === aiImportRunId) aiImportTask.value = task
+        if (runId === quickImportRunId) quickImportTask.value = task
       },
       onProgress: (progress) => {
-        if (runId !== aiImportRunId) return
-        aiImportPhase.value = progress.phase
-        aiImportCurrentImage.value = progress.current
-        aiImportTotalImages.value = progress.total
-        aiImportUploadProgress.value = progress.uploadProgress
+        if (runId !== quickImportRunId) return
+        quickImportPhase.value = progress.phase
+        quickImportCurrentImage.value = progress.current
+        quickImportTotalImages.value = progress.total
+        quickImportUploadProgress.value = progress.uploadProgress
       },
     })
-    if (runId !== aiImportRunId) return
-    aiImportCandidates.value = result.events
-    aiImportWarnings.value = result.warnings
-    aiImportOpen.value = false
+    if (runId !== quickImportRunId) return
+    quickImportCandidates.value = result.events
+    quickImportWarnings.value = result.warnings
+    quickImportOpen.value = false
     if (!result.events.length) {
       uni.showToast({ title: result.warnings[0] || '未识别到可导入的行程信息', icon: 'none' })
       return
     }
-    aiImportReviewOpen.value = true
+    quickImportReviewOpen.value = true
   } catch (e) {
-    if (runId !== aiImportRunId) return
-    showAiImportError(e instanceof Error ? e.message : '识别失败')
+    if (runId !== quickImportRunId) return
+    showQuickImportError(e instanceof Error ? e.message : '识别失败')
   } finally {
-    if (runId === aiImportRunId) {
-      aiImportLoading.value = false
-      aiImportTask.value = null
-      stopAiImportTimer()
+    if (runId === quickImportRunId) {
+      quickImportLoading.value = false
+      quickImportTask.value = null
+      stopQuickImportTimer()
     }
   }
 }
 
-const candidateTimeLabel = (candidate: AiTripEventCandidate) => {
+const candidateTimeLabel = (candidate: QuickTripEventCandidate) => {
   if (!candidate.startAt) return '时间待补充'
   if (candidate.meta?.allDay === true) {
     if (candidate.endAt) return `${datePart(candidate.startAt)} - ${datePart(candidate.endAt)}`
@@ -1656,17 +1656,17 @@ const confidenceLabel = (confidence: string) => (
   { high: '高', medium: '中', low: '低' }[confidence] || '中'
 )
 
-const canSaveAiCandidates = computed(() => (
-  aiImportCandidates.value.length > 0
-  && aiImportCandidates.value.every((candidate) => Boolean(candidate.title.trim() && candidate.startAt))
+const canSaveQuickCandidates = computed(() => (
+  quickImportCandidates.value.length > 0
+  && quickImportCandidates.value.every((candidate) => Boolean(candidate.title.trim() && candidate.startAt))
 ))
 
-const onRemoveAiCandidate = (clientId: string) => {
-  aiImportCandidates.value = aiImportCandidates.value.filter((candidate) => candidate.clientId !== clientId)
+const onRemoveQuickCandidate = (clientId: string) => {
+  quickImportCandidates.value = quickImportCandidates.value.filter((candidate) => candidate.clientId !== clientId)
 }
 
-const onEditAiCandidate = (candidate: AiTripEventCandidate) => {
-  eventEditingId.value = `ai:${candidate.clientId}`
+const onEditQuickCandidate = (candidate: QuickTripEventCandidate) => {
+  eventEditingId.value = `import:${candidate.clientId}`
   eventForm.icon = normalizeIconName(candidate.meta?.icon, 'sparkle')
   eventForm.title = candidate.title
   eventForm.date = candidate.startAt ? datePart(candidate.startAt) : (form.departDate || datePart(new Date().toISOString()))
@@ -1681,10 +1681,10 @@ const onEditAiCandidate = (candidate: AiTripEventCandidate) => {
   eventAddOpen.value = true
 }
 
-const updateAiCandidateFromEventForm = (clientId: string) => {
+const updateQuickCandidateFromEventForm = (clientId: string) => {
   const startAt = buildIsoDateTime(eventForm.date, eventForm.startTime)
   const endAt = !eventForm.allDay && eventForm.endTime ? buildIsoDateTime(eventForm.date, eventForm.endTime) : null
-  aiImportCandidates.value = aiImportCandidates.value.map((candidate) => {
+  quickImportCandidates.value = quickImportCandidates.value.map((candidate) => {
     if (candidate.clientId !== clientId) return candidate
     const warnings = candidate.warnings.filter((warning) => warning !== '缺少开始时间')
     return {
@@ -1703,20 +1703,20 @@ const updateAiCandidateFromEventForm = (clientId: string) => {
   })
 }
 
-const onSaveAiCandidates = async () => {
-  if (!canSaveAiCandidates.value || aiImportLoading.value) return
-  aiImportLoading.value = true
+const onSaveQuickCandidates = async () => {
+  if (!canSaveQuickCandidates.value || quickImportLoading.value) return
+  quickImportLoading.value = true
   try {
-    await aiImportApi.importTripEvents(tripId.value, aiImportCandidates.value)
+    await quickImportApi.importTripEvents(tripId.value, quickImportCandidates.value)
     await loadEvents()
-    aiImportReviewOpen.value = false
-    aiImportCandidates.value = []
-    aiImportWarnings.value = []
+    quickImportReviewOpen.value = false
+    quickImportCandidates.value = []
+    quickImportWarnings.value = []
     uni.showToast({ title: '已导入行程', icon: 'success' })
   } catch (e) {
     uni.showToast({ title: e instanceof Error ? e.message : '保存失败', icon: 'none' })
   } finally {
-    aiImportLoading.value = false
+    quickImportLoading.value = false
   }
 }
 
@@ -2053,8 +2053,8 @@ const onEventAddSubmit = async () => {
   if (!startAt) return
   const isAllDay = eventForm.allDay
   const endAt = !isAllDay && eventForm.endTime ? buildIsoDateTime(eventForm.date, eventForm.endTime) : null
-  if (eventEditingId.value.startsWith('ai:')) {
-    updateAiCandidateFromEventForm(eventEditingId.value.slice(3))
+  if (eventEditingId.value.startsWith('import:')) {
+    updateQuickCandidateFromEventForm(eventEditingId.value.slice(7))
     eventAddOpen.value = false
     eventEditingId.value = ''
     uni.showToast({ title: '已更新候选项', icon: 'success' })
@@ -3276,10 +3276,10 @@ const onAddSubmit = async () => {
   max-height: calc(86vh - 230rpx - env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
-.modal--ai-review {
+.modal--quick-review {
   height: calc(86vh - env(safe-area-inset-bottom));
 }
-.ai-review-scroll {
+.quick-review-scroll {
   flex: 1 1 0;
   height: 0;
   max-height: none;
@@ -3370,7 +3370,7 @@ const onAddSubmit = async () => {
   font-weight: 800;
   color: $candy-on-surface-variant;
 }
-.ai-import-card {
+.quick-import-card {
   display: flex;
   flex-direction: row;
   gap: 18rpx;
@@ -3378,7 +3378,7 @@ const onAddSubmit = async () => {
   border-radius: $candy-radius-md;
   background: $candy-surface-container-low;
 }
-.ai-import-card__icon {
+.quick-import-card__icon {
   flex: 0 0 72rpx;
   width: 72rpx;
   height: 72rpx;
@@ -3390,24 +3390,24 @@ const onAddSubmit = async () => {
   background: $candy-primary-fixed;
   font-size: 38rpx;
 }
-.ai-import-card__copy {
+.quick-import-card__copy {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8rpx;
 }
-.ai-import-card__title {
+.quick-import-card__title {
   font-size: $candy-font-body-lg;
   font-weight: 800;
   color: $candy-on-surface;
 }
-.ai-import-card__hint {
+.quick-import-card__hint {
   font-size: $candy-font-label-md;
   color: $candy-on-surface-variant;
   line-height: 1.5;
 }
-.ai-import-status {
+.quick-import-status {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -3417,46 +3417,46 @@ const onAddSubmit = async () => {
   background: $candy-surface-container-lowest;
   border: 2rpx solid $candy-outline-variant;
 }
-.ai-import-spinner {
+.quick-import-spinner {
   flex: 0 0 54rpx;
   width: 54rpx;
   height: 54rpx;
   border-radius: 50%;
   border: 6rpx solid $candy-primary-fixed;
   border-top-color: $candy-primary;
-  animation: ai-import-spin 1s linear infinite;
+  animation: quick-import-spin 1s linear infinite;
 }
-.ai-import-status__copy {
+.quick-import-status__copy {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8rpx;
 }
-.ai-import-status__title {
+.quick-import-status__title {
   color: $candy-on-surface;
   font-size: $candy-font-body-md;
   font-weight: 800;
 }
-.ai-import-status__hint {
+.quick-import-status__hint {
   color: $candy-on-surface-variant;
   font-size: $candy-font-label-md;
   line-height: 1.45;
 }
-.ai-import-progress {
+.quick-import-progress {
   width: 100%;
   height: 10rpx;
   overflow: hidden;
   border-radius: $candy-radius-full;
   background: $candy-surface-container;
 }
-.ai-import-progress__bar {
+.quick-import-progress__bar {
   height: 100%;
   border-radius: $candy-radius-full;
   background: $candy-primary;
   transition: width 0.25s ease;
 }
-@keyframes ai-import-spin {
+@keyframes quick-import-spin {
   from {
     transform: rotate(0deg);
   }
@@ -3464,7 +3464,7 @@ const onAddSubmit = async () => {
     transform: rotate(360deg);
   }
 }
-.ai-warning-list {
+.quick-warning-list {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
@@ -3477,34 +3477,34 @@ const onAddSubmit = async () => {
   font-size: $candy-font-label-md;
   line-height: 1.4;
 }
-.ai-candidate-list {
+.quick-candidate-list {
   display: flex;
   flex-direction: column;
   gap: 18rpx;
   padding-bottom: 4rpx;
 }
-.ai-candidate-card {
+.quick-candidate-card {
   padding: 18rpx;
   border-radius: $candy-radius-md;
   background: $candy-surface-container-low;
 }
-.ai-candidate-card__head {
+.quick-candidate-card__head {
   display: flex;
   flex-direction: row;
   gap: 16rpx;
 }
-.ai-candidate-card__head .event-icon-badge {
+.quick-candidate-card__head .event-icon-badge {
   flex: 0 0 58rpx;
   margin-top: 0;
 }
-.ai-candidate-card__copy {
+.quick-candidate-card__copy {
   min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8rpx;
 }
-.ai-candidate-card__actions {
+.quick-candidate-card__actions {
   margin-top: 16rpx;
   display: flex;
   flex-direction: row;

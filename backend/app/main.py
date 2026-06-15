@@ -2,13 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import (
-    ai_import,
     auth,
     checklist,
     health,
+    import_jobs,
     inspirations,
     me,
     places,
+    quick_import,
     trip_events,
     trip_invites,
     trips,
@@ -34,8 +35,9 @@ app.include_router(auth.router, prefix=api_v1)
 app.include_router(me.router, prefix=api_v1)
 app.include_router(trips.router, prefix=api_v1)
 app.include_router(trip_events.router, prefix=api_v1)
-app.include_router(ai_import.router, prefix=api_v1)
+app.include_router(quick_import.router, prefix=api_v1)
 app.include_router(trip_invites.router, prefix=api_v1)
 app.include_router(checklist.router, prefix=api_v1)
+app.include_router(import_jobs.router, prefix=api_v1)
 app.include_router(inspirations.router, prefix=api_v1)
 app.include_router(places.router, prefix=api_v1)

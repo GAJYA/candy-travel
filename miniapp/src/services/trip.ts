@@ -13,7 +13,7 @@ export interface Trip {
   coverImageUrl: string | null
   note: string | null
   timezone: string
-  createdVia: 'manual' | 'ai_import'
+  createdVia: string
   createdAt: string
   updatedAt: string
 }

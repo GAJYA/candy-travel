@@ -1,12 +1,12 @@
 import { apiBaseUrl, request, tokenStorage } from './api'
 import type { TripEvent } from './trip-event'
 
-export type AiEventConfidence = 'high' | 'medium' | 'low'
-export type AiEventType = 'transport' | 'stay' | 'activity' | 'reminder'
+export type QuickEventConfidence = 'high' | 'medium' | 'low'
+export type QuickEventType = 'transport' | 'stay' | 'activity' | 'reminder'
 
-export interface AiTripEventCandidate {
+export interface QuickTripEventCandidate {
   clientId: string
-  eventType: AiEventType
+  eventType: QuickEventType
   title: string
   startAt: string | null
   endAt: string | null
@@ -16,35 +16,35 @@ export interface AiTripEventCandidate {
   longitude: number | null
   note: string | null
   meta: Record<string, unknown>
-  confidence: AiEventConfidence
+  confidence: QuickEventConfidence
   warnings: string[]
   sortOrder: number
 }
 
-export interface AiExtractEventsResponse {
+export interface QuickExtractEventsResponse {
   tripId: string
   model: string
-  events: AiTripEventCandidate[]
+  events: QuickTripEventCandidate[]
   warnings: string[]
 }
 
-export type AiImportPhase = 'uploading' | 'recognizing'
+export type QuickImportPhase = 'uploading' | 'recognizing'
 
-export interface AiImportProgress {
-  phase: AiImportPhase
+export interface QuickImportProgress {
+  phase: QuickImportPhase
   current: number
   total: number
   uploadProgress: number
 }
 
-export interface AiImportUploadTask {
+export interface QuickImportUploadTask {
   abort: () => void
 }
 
-export interface AiImportExtractOptions {
+export interface QuickImportExtractOptions {
   timeoutMs?: number
-  onProgress?: (progress: AiImportProgress) => void
-  onUploadTask?: (task: AiImportUploadTask) => void
+  onProgress?: (progress: QuickImportProgress) => void
+  onUploadTask?: (task: QuickImportUploadTask) => void
 }
 
 const formatUploadError = (errMsg: string) => {
@@ -71,8 +71,8 @@ const uploadOneImage = (
   filePath: string,
   index: number,
   total: number,
-  options: AiImportExtractOptions,
-): Promise<AiExtractEventsResponse> => {
+  options: QuickImportExtractOptions,
+): Promise<QuickExtractEventsResponse> => {
   const token = tokenStorage.get()
   return new Promise((resolve, reject) => {
     let settled = false
@@ -87,7 +87,7 @@ const uploadOneImage = (
     }, options.timeoutMs ?? 120000)
 
     const task = uni.uploadFile({
-      url: `${apiBaseUrl}/trips/${tripId}/ai/extract-events`,
+      url: `${apiBaseUrl}/trips/${tripId}/quick-import/extract-events`,
       filePath,
       name: 'images',
       header: token ? { Authorization: `Bearer ${token}` } : {},
@@ -99,7 +99,7 @@ const uploadOneImage = (
         const status = res.statusCode ?? 0
         if (status >= 200 && status < 300) {
           try {
-            resolve(JSON.parse(res.data) as AiExtractEventsResponse)
+            resolve(JSON.parse(res.data) as QuickExtractEventsResponse)
           } catch {
             reject(new Error('识别结果解析失败'))
           }
@@ -113,7 +113,7 @@ const uploadOneImage = (
         clearTimeout(timeout)
         reject(new Error(timedOut ? '识别耗时过长，请稍后重试或换一张更清晰的截图' : formatUploadError(err.errMsg)))
       },
-    }) as unknown as AiImportUploadTask & {
+    }) as unknown as QuickImportUploadTask & {
       onProgressUpdate?: (callback: (progress: { progress: number }) => void) => void
     }
 
@@ -131,13 +131,13 @@ const uploadOneImage = (
   })
 }
 
-export const aiImportApi = {
+export const quickImportApi = {
   async extractTripEvents(
     tripId: string,
     filePaths: string[],
-    options: AiImportExtractOptions = {},
-  ): Promise<AiExtractEventsResponse> {
-    const responses: AiExtractEventsResponse[] = []
+    options: QuickImportExtractOptions = {},
+  ): Promise<QuickExtractEventsResponse> {
+    const responses: QuickExtractEventsResponse[] = []
     for (const [index, filePath] of filePaths.entries()) {
       responses.push(await uploadOneImage(tripId, filePath, index, filePaths.length, options))
     }
@@ -157,8 +157,8 @@ export const aiImportApi = {
     }
   },
 
-  importTripEvents: (tripId: string, events: AiTripEventCandidate[]) =>
-    request<TripEvent[]>(`/trips/${tripId}/ai/import-events`, {
+  importTripEvents: (tripId: string, events: QuickTripEventCandidate[]) =>
+    request<TripEvent[]>(`/trips/${tripId}/quick-import/import-events`, {
       method: 'POST',
       data: { events },
     }),

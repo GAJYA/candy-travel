@@ -20,11 +20,11 @@ def extract_message_content(data: dict[str, Any]) -> str:
 
     choices = data.get("choices")
     if not isinstance(choices, list) or not choices:
-        raise AiClientError("AI response missing message content")
+        raise AiClientError("import service response missing message content")
 
     choice = choices[0]
     if not isinstance(choice, dict):
-        raise AiClientError("AI response missing message content")
+        raise AiClientError("import service response missing message content")
 
     message = choice.get("message")
     if isinstance(message, dict):
@@ -49,7 +49,7 @@ def extract_message_content(data: dict[str, Any]) -> str:
     if isinstance(text, str) and text.strip():
         return text
 
-    raise AiClientError("AI response missing message content")
+    raise AiClientError("import service response missing message content")
 
 
 class AiClient:
@@ -70,7 +70,7 @@ class AiClient:
 
     async def describe_images(self, *, prompt: str, images: list[tuple[bytes, str]]) -> str:
         if not self.base_url or not self.api_key:
-            raise AiClientError("AI service is not configured")
+            raise AiClientError("import service is not configured")
         if not images:
             raise AiClientError("at least one image is required")
 
@@ -103,11 +103,11 @@ class AiClient:
 
         if last_content_error is not None:
             raise last_content_error
-        raise AiClientError("AI response missing message content")
+        raise AiClientError("import service response missing message content")
 
     async def complete_text(self, *, prompt: str) -> str:
         if not self.base_url or not self.api_key:
-            raise AiClientError("AI service is not configured")
+            raise AiClientError("import service is not configured")
 
         payload = {
             "model": self.model,
@@ -132,16 +132,18 @@ class AiClient:
                 )
                 response.raise_for_status()
         except httpx.TimeoutException as e:
-            raise AiClientError("AI request timed out") from e
+            raise AiClientError("import service request timed out") from e
         except httpx.HTTPStatusError as e:
-            raise AiClientError(f"AI request failed with HTTP {e.response.status_code}") from e
+            raise AiClientError(
+                f"import service request failed with HTTP {e.response.status_code}"
+            ) from e
         except httpx.HTTPError as e:
-            raise AiClientError("AI request failed") from e
+            raise AiClientError("import service request failed") from e
 
         try:
             data = response.json()
         except ValueError as e:
-            raise AiClientError("AI response was not JSON") from e
+            raise AiClientError("import service response was not JSON") from e
         if not isinstance(data, dict):
-            raise AiClientError("AI response must be a JSON object")
+            raise AiClientError("import service response must be a JSON object")
         return data

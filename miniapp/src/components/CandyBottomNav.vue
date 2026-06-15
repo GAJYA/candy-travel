@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import CandyIcon from './CandyIcon.vue'
 
-type NavKey = 'home' | 'calendar' | 'ai' | 'profile' | 'trip'
+type NavKey = 'home' | 'calendar' | 'import' | 'profile' | 'trip'
 
 interface NavItem {
   key: NavKey
@@ -38,7 +38,7 @@ const props = defineProps<{
 const items: NavItem[] = [
   { key: 'home', icon: 'home', label: '首页', url: '/pages/index/index' },
   { key: 'calendar', icon: 'calendar', label: '日历', url: '/pages/calendar/index' },
-  { key: 'ai', icon: 'ai', label: 'AI助手', url: '/pages/ai/index' },
+  { key: 'import', icon: 'sparkle', label: '导入', url: '/pages/import/index' },
   { key: 'profile', icon: 'user', label: '我的', url: '/pages/profile/index' },
 ]
 

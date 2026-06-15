@@ -29,7 +29,7 @@ def test_extract_message_content_accepts_list_content():
 
 
 def test_extract_message_content_raises_on_missing_content():
-    with pytest.raises(AiClientError, match="AI response missing message content"):
+    with pytest.raises(AiClientError, match="import service response missing message content"):
         extract_message_content({"choices": [{"message": {"role": "assistant"}}]})
 
 

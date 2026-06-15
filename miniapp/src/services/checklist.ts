@@ -11,7 +11,7 @@ export type ChecklistCategory =
   | 'task'
   | 'other'
 
-export type ChecklistSource = 'template' | 'manual' | 'ai_generated'
+export type ChecklistSource = string
 
 export interface ChecklistTemplate {
   id: string

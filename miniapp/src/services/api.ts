@@ -51,6 +51,7 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   data?: unknown
   header?: Record<string, string>
+  timeoutMs?: number
   /** 标记是否需要附带 token；默认 true */
   auth?: boolean
 }
@@ -81,6 +82,7 @@ export const request = <T>(path: string, options: RequestOptions = {}): Promise<
       method: (options.method ?? 'GET') as UniNamespace.RequestOptions['method'],
       data: options.data as UniNamespace.RequestOptions['data'],
       header: headers,
+      timeout: options.timeoutMs,
       success: (res) => {
         const status = res.statusCode ?? 0
         if (status >= 200 && status < 300) {
@@ -100,7 +102,10 @@ export const request = <T>(path: string, options: RequestOptions = {}): Promise<
         )
       },
       fail: (err) => {
-        reject(new ApiRequestError(err.errMsg || 'request failed', 0, err))
+        const message = err.errMsg?.includes('timeout')
+          ? '请求耗时过长，请稍后重试'
+          : (err.errMsg || 'request failed')
+        reject(new ApiRequestError(message, 0, err))
       },
     })
   })
