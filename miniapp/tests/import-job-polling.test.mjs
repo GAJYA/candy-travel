@@ -31,8 +31,8 @@ test('import page polls job status with a hard stop and clears timers', () => {
   )
   assert.match(
     importPageSource,
-    /const\s+IMPORT_JOB_MAX_POLLS\s*=\s*60/,
-    'page should stop polling after a bounded number of attempts',
+    /const\s+IMPORT_JOB_MAX_POLLS\s*=\s*72/,
+    'page should stop polling after 3 minutes of attempts',
   )
   assert.match(
     importPageSource,

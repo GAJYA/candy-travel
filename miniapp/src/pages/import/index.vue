@@ -106,7 +106,7 @@ const pollCount = ref(0)
 const pollingTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 const IMPORT_JOB_POLL_INTERVAL_MS = 2500
-const IMPORT_JOB_MAX_POLLS = 60
+const IMPORT_JOB_MAX_POLLS = 72
 const shareEventTimes = ['09:00', '11:00', '14:00', '16:00', '19:00']
 const shareEventIcons: Record<QuickTripEventCandidate['eventType'], string> = {
   transport: 'plane',

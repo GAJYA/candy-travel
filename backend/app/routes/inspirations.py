@@ -202,7 +202,7 @@ JSON 字段：
 {shared_content[:8000]}
 """.strip()
     result = _parse_plan_json(
-        await AiClient(timeout_seconds=45).complete_text(prompt=prompt)
+        await AiClient(timeout_seconds=180).complete_text(prompt=prompt)
     )
     if not result["destination"]:
         raise AiClientError("import service response missing destination")

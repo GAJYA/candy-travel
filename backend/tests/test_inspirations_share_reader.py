@@ -77,7 +77,7 @@ def test_parse_plan_json_extracts_place_events() -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_inspiration_plan_uses_short_timeout(monkeypatch) -> None:
+async def test_extract_inspiration_plan_uses_three_minute_timeout(monkeypatch) -> None:
     captured_timeout = None
 
     class FakeAiClient:
@@ -93,7 +93,7 @@ async def test_extract_inspiration_plan_uses_short_timeout(monkeypatch) -> None:
 
     result = await inspirations._extract_inspiration_plan("旅行分享")
 
-    assert captured_timeout == 45
+    assert captured_timeout == 180
     assert result["destination"] == "云南"
 
 
