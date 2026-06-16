@@ -18,19 +18,7 @@
       </view>
     </view>
 
-    <view v-if="!auth.isAuthenticated" class="candy-card login-card">
-      <view class="login-mark">
-        <text>✦</text>
-      </view>
-      <text class="login-title">开启你的P人旅行计划</text>
-      <text class="login-hint">微信登录后开始整理下一段旅程</text>
-      <button class="candy-btn candy-btn--primary login-btn" :disabled="auth.loading" @click="login">
-        {{ auth.loading ? '登录中...' : '微信登录' }}
-      </button>
-      <text v-if="auth.error" class="candy-text-error login-error">{{ auth.error }}</text>
-    </view>
-
-    <view v-else class="logged">
+    <view class="logged">
       <view v-if="nextTrip" class="countdown-card">
         <view class="countdown-top">
           <text class="countdown-label">下一次旅程开始于</text>
@@ -52,9 +40,14 @@
         </view>
       </view>
 
-      <view v-else class="countdown-card countdown-card--empty">
+      <view v-else-if="auth.isAuthenticated" class="countdown-card countdown-card--empty">
         <text class="countdown-label">下一次旅程开始于</text>
         <text class="empty-countdown">先设置出发日期</text>
+      </view>
+
+      <view v-else class="countdown-card countdown-card--empty guest-preview">
+        <text class="countdown-label">下一次旅程开始于</text>
+        <text class="empty-countdown">先挑一段想去的路线</text>
       </view>
 
       <button class="new-btn" @click="onCreate">
@@ -73,20 +66,21 @@
         <text class="section-title">即将出发</text>
       </view>
 
-      <view v-if="trip.listLoading" class="empty">
+      <view v-if="auth.isAuthenticated && trip.listLoading" class="empty">
         <text class="empty-hint">加载中...</text>
       </view>
-      <view v-else-if="trip.list.length === 0" class="candy-card empty">
+      <view v-else-if="visibleTrips.length === 0" class="candy-card empty">
         <text class="empty-emoji">🍬</text>
         <text class="empty-title">还没有任何旅行</text>
         <text class="empty-hint">点上面的按钮，给即将到来的下一段旅程留个位置吧</text>
       </view>
       <view v-else class="trip-list">
         <view
-          v-for="t in sortedTrips"
+          v-for="t in visibleTrips"
           :key="t.id"
           class="candy-card trip-card"
-          @click="onOpen(t.id)"
+          :class="{ 'trip-card--preview': !auth.isAuthenticated }"
+          @click="onTripCardClick(t.id)"
         >
           <view class="trip-card__rail" />
           <view class="trip-card__content">
@@ -176,10 +170,39 @@ const subtitle = computed(() => {
   return `共 ${trip.list.length} 段旅程`
 })
 
+const formatDateOffset = (offset: number) => {
+  const date = new Date(now.value)
+  date.setHours(0, 0, 0, 0)
+  date.setDate(date.getDate() + offset)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+const guestTrips = computed<Trip[]>(() => [{
+  id: 'guest-preview-yunnan',
+  title: '云南慢游计划',
+  destinationCity: '大理',
+  status: 'planning',
+  startDate: formatDateOffset(14),
+  endDate: formatDateOffset(17),
+  coverImageUrl: null,
+  note: null,
+  timezone: 'Asia/Shanghai',
+  createdVia: 'preview',
+  createdAt: new Date(now.value).toISOString(),
+  updatedAt: new Date(now.value).toISOString(),
+}])
+
 const sortedTrips = computed(() => sortTripsForDisplay(trip.list))
+const visibleTrips = computed(() => (
+  auth.isAuthenticated ? sortedTrips.value : guestTrips.value
+))
 
 const nextTrip = computed(() =>
-  sortedTrips.value.find((t) => isUpcomingTrip(t)) || null,
+  visibleTrips.value.find((t) => isUpcomingTrip(t)) || null,
 )
 
 const countdown = computed(() => {
@@ -226,12 +249,18 @@ const login = async () => {
   try {
     await auth.login()
     await trip.loadList()
+    return true
   } catch {
     uni.showToast({ title: auth.error || '登录失败', icon: 'none' })
+    return false
   }
 }
 
 const onCreate = async () => {
+  if (!auth.isAuthenticated) {
+    const loggedIn = await login()
+    if (!loggedIn) return
+  }
   uni.navigateTo({
     url: '/pages/edit/index?mode=create',
     fail: (err) => {
@@ -242,6 +271,14 @@ const onCreate = async () => {
 
 const onOpen = (id: string) => {
   uni.navigateTo({ url: `/pages/edit/index?id=${id}` })
+}
+
+const onTripCardClick = (id: string) => {
+  if (!auth.isAuthenticated) {
+    void onCreate()
+    return
+  }
+  onOpen(id)
 }
 
 const onShowJoinInvite = () => {
